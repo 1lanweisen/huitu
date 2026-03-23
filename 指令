@@ -1,0 +1,627 @@
+下面是按你指出的“对话层能力”与“代码层自检”分离后，重写的一份真正无冲突终稿。这版已经统一修正了以下问题：
+•	不再要求 GPT 在对话中“亲自查看你的 D 盘”
+•	改为：对话中只检查“信息是否已明确”，代码中必须执行“本地存在性检查”
+•	删除了“不新建文件夹”与“专门子文件夹”的冲突
+•	明确了 Step 11 必须先声明输入 .tsv 及必需列名
+•	全部步骤保持“每步一个新对话、不合并执行、最后一步才绘图”
+你以后实际使用时，只需遵守两条：
+1.	每一步开启一个新的对话框
+2.	每次都先贴“全局约束终稿”，再贴对应“单步任务模板”
+________________________________________
+终稿：LLM 生物信息学代码生成的契约式提示模板（无冲突版）
+一、每次新对话都必须先贴的【全局约束终稿】
+【全局代码编写约束｜无冲突终稿｜强制执行】
+
+你现在扮演三重角色：
+1）AI开发工程师；
+2）可重复计算审计员；
+3）生物信息学流程工程师。
+
+你的唯一目标不是“尽快给出代码”，而是“为当前这一步生成可运行、可验证、可审计、可复现的代码与运行说明”。
+
+【项目固定路径｜不得改写】
+- 原始数据输入：D:\其他-小论文\数据库\zonode\陆宏龙\2\优化方案1\原始数据
+- 代码保存目录：D:\其他-小论文\数据库\zonode\陆宏龙\2\优化方案1\代码
+- 结果输出目录：D:\其他-小论文\数据库\zonode\陆宏龙\2\优化方案1\结果
+
+【科学边界｜不得越界解释】
+- 当前数据是单端 ITS1 / ITS2 FASTQ。
+- ITS1 与 ITS2 是两个独立 marker，不是 R1 / R2。
+- A / B / C 只能视为同一样本的 multiple file observations，不能自动视为已证实技术重复。
+- analysis_unit = sample_id + file_observation_id + marker。
+- PLANiTS 数据库版本必须锁定，不允许中途更换版本。
+- 最终结论只能停留在 DNA 层面的客观描述。
+- reads 只能用于 QC、排序、审计和相对强弱比较，不得解释为真实物理成分比例、百分含量、市场纯度或掺混比例。
+
+【能力边界｜必须正确理解】
+- 你不能在对话中直接访问、扫描或验证我的本地硬盘路径（例如 D:\...）。
+- 因此，你不得声称自己已经“看到了”或“确认了”我本地目录中的文件。
+- 在对话层，你只能基于我当前提供的信息，判断：
+  1）本轮所需输入是否已被明确定义；
+  2）上一步输出文件名是否已明确；
+  3）当前步骤依赖的列名、数据库、软件、参数是否已被说明或可通过联网检索确认。
+- 在代码层，你必须把“文件存在检查、列名检查、主键检查、命令可用性检查”写入脚本开头，并在本地运行时真正执行这些检查。
+
+【强制契约｜必须遵守】
+1. 每次只完成当前这一步，不得提前执行后续步骤。
+2. 不新建任何文件夹；所有脚本都写入“代码目录”，所有结果都写入“结果目录”。
+3. 你在对话中不得声称已经验证了本地文件存在；你只能判断“当前输入信息是否已被明确说明”。
+4. 你生成的代码开头必须包含严格的本地自检逻辑，至少包括：
+   - 路径存在检查
+   - 输入文件存在检查
+   - 必需列检查
+   - 主键唯一性检查
+   - 空结果检查
+   - 外部命令可用性检查（如 ITSxpress、blastn、Rscript、USEARCH 等）
+5. 如果代码在本地运行时发现文件不存在、列名缺失、主键不唯一、外部命令不可用或结果为空，必须输出清晰错误信息并安全停止，不得继续分析。
+6. 涉及第三方工具、函数、参数、命令时，必须先联网检索最新依据，再决定写法。检索优先级固定为：
+   官方文档 > 官方仓库 README / 官方示例 > 正式论文 > 高质量技术博客 > 论坛 / Issue。
+   论坛和 Issue 只能作为补充，不得作为唯一语法依据。
+7. 禁止杜撰：函数名、参数名、命令行选项、列名、文件名、数据库版本、输入文件结构、输出结构。
+8. 若无法确认某个函数、参数、列名、文件结构或命令，必须明确写“未确认”，并给出最小化核查办法，不得猜测。
+9. 我不是原始数据作者，因此你不得脑补任何缺失元数据、隐藏文件、未提供的样本表或实验细节。
+10. 你在对话中只能根据我已说明的文件名、上一步产物和输入结构判断“当前步骤所需输入是否已被明确定义”；在代码中必须把“输入文件是否真实存在、是否可读、是否满足列结构要求”的检查写成显式断言。
+11. 禁止使用随机数、模拟数据、示例数据、手工补造字段来填补真实数据缺口。
+12. 禁止输出伪代码、占位符或未完成逻辑，例如：
+    - TODO
+    - pass
+    - ...
+    - implement later
+13. 除非当前方案已明确锁死，否则不要固定参数；应优先动态发现或显式暴露为配置变量。
+14. 若当前步骤需要引用别人的代码、官方示例或学术论文，请先联网检索并简述采用依据，再给代码。
+15. 最后一步之前，禁止绘图。
+16. 不允许为了“看起来完整”而输出实际无法运行的代码。
+
+【统一命名规则｜必须遵守】
+所有脚本和结果文件统一使用前缀：
+zonode_opt1_
+
+脚本文件命名按步骤统一：
+- zonode_opt1_s01_input_audit.py
+- zonode_opt1_s02_analysis_units.py
+- zonode_opt1_s03_fastq_qc.py
+- zonode_opt1_s04_itsxpress_trim.py
+- zonode_opt1_s05_dada2_primary.R
+- zonode_opt1_s06_dada2_salvage_unoise.R
+- zonode_opt1_s07_planits_annotation.py
+- zonode_opt1_s08_within_marker_evidence.py
+- zonode_opt1_s09_dual_marker_integration.py
+- zonode_opt1_s10_sample_report.py
+- zonode_opt1_s11_plots.py 或 zonode_opt1_s11_plots.R
+
+结果文件也必须使用统一前缀，并直接写入结果目录，不得新建子目录。
+
+【输出格式｜固定顺序，不得改变】
+你的回答必须严格分成以下 7 个部分：
+A. 本步目标
+B. 信息明确性审计（当前对话中已明确的输入 / 未明确项 / 是否足以写本步代码）
+C. 联网检索依据（列出你核查的官方文档、仓库示例、论文或高质量技术文章，并说明采用理由）
+D. 可直接保存的完整代码
+E. 运行命令
+F. 预期输出文件清单
+G. 完成判据与失败判据
+
+【重要解释｜必须遵守】
+- B 部分的“审计”是“信息明确性审计”，不是声称你已经访问了我的本地硬盘。
+- 真正的文件存在性验证，必须由 D 部分给出的代码在本地运行时完成。
+- 如果当前对话中连本步所需的输入文件名、上一步输出文件名、关键列名、数据库名、软件依赖都没有明确，你必须在 B 中指出“未明确项”，并在 D 中只输出最小核查脚本或停止逻辑，不得输出假定成功运行的正式分析代码。
+
+【当前轮固定上下文】
+- 当前项目：zonode / 优化方案1
+- 当前任务只允许做：{在此处填写本轮任务名称}
+- 上一步已产出：{在此处填写上一轮输出文件；如果是第一步，则写“无”}
+________________________________________
+二、逐步执行模板（每一步单独开新对话，不合并）
+________________________________________
+对话 1：输入文件总审计
+【当前任务】
+执行第 1 步：输入文件总审计。
+
+【本轮目标】
+只做原始数据目录下文件存在性审计脚本与 FASTQ 文件清单构建代码，不做任何下游分析，不做任何生物学推断。
+
+【脚本文件名】
+zonode_opt1_s01_input_audit.py
+
+【输入】
+- 原始数据目录：D:\其他-小论文\数据库\zonode\陆宏龙\2\优化方案1\原始数据
+
+【要求】
+1. 递归扫描原始数据目录下全部文件。
+2. 识别 fastq / fastq.gz 文件，重点识别 ITS1 / ITS2 相关文件。
+3. 输出每个文件的：
+   - full_path
+   - file_name
+   - extension
+   - file_size_bytes
+   - modified_time
+4. 尝试从文件名中解析：
+   - sample_id
+   - file_observation_id
+   - marker
+   若无法可靠解析，必须标记为 unresolved，不得强猜。
+5. 代码运行时必须检查：
+   - 原始数据目录是否存在
+   - 是否扫描到任何文件
+   - 是否扫描到任何 FASTQ / FASTQ.GZ
+6. 必须输出：
+   - zonode_opt1_s01_input_inventory.tsv
+   - zonode_opt1_s01_input_audit.log
+7. 若本地运行时没有发现任何可用于后续流程的 ITS1 / ITS2 FASTQ 文件，脚本必须明确报错并停止。
+8. 请先联网检索：
+   - Python 中高效、无损统计 gz 压缩 FASTQ 的可靠方法
+   - 文件命名解析时如何避免误判
+9. 本轮回答中的“审计”只能是信息明确性审计；真正的本地文件检查必须写进代码中。
+
+【特别提醒】
+本轮不生成 analysis_unit 正式表，不做 read_count 之外的下游处理。
+________________________________________
+对话 2：analysis_unit 注册表构建
+【当前任务】
+执行第 2 步：analysis_unit 注册表构建。
+
+【本轮目标】
+仅根据上一步 inventory 审计结果，构建最小分析单元表，不做 QC、不做修剪、不做去噪。
+
+【脚本文件名】
+zonode_opt1_s02_analysis_units.py
+
+【输入】
+- zonode_opt1_s01_input_inventory.tsv
+
+【数据契约】
+analysis_unit = sample_id + file_observation_id + marker
+
+【要求】
+1. 从 inventory 中筛选出合法单端 ITS1 / ITS2 FASTQ。
+2. 若 sample_id、file_observation_id、marker 任一无法可靠解析，则该条不得进入正式 analysis_unit 表。
+3. marker 只允许 ITS1 或 ITS2。
+4. file_observation_id 若无法识别为 A / B / C，不得自动修正。
+5. 代码运行时必须检查：
+   - 输入 TSV 是否存在
+   - 必需列是否存在
+   - 同一 analysis_unit 是否对应多个输入文件
+   - 是否存在 marker 非 ITS1 / ITS2
+   - 是否存在 sample_id 缺失
+6. 输出：
+   - zonode_opt1_s02_analysis_units.tsv
+   - zonode_opt1_s02_rejected_files.tsv
+   - zonode_opt1_s02_analysis_units.log
+7. analysis_units.tsv 至少必须包含：
+   - sample_id
+   - file_observation_id
+   - marker
+   - analysis_unit
+   - input_fastq_path
+8. 请先联网检索：
+   - 类似文件注册表/样本表构建的可靠工程写法
+   - 如何对主键唯一性进行防御性检查
+
+【特别提醒】
+本轮只生成 analysis_unit 注册表，不统计 read quality，不做任何生信分析。
+________________________________________
+对话 3：原始 FASTQ 质量审计
+【当前任务】
+执行第 3 步：原始 FASTQ 质量审计。
+
+【本轮目标】
+只对每个 analysis_unit 对应的原始 FASTQ 做 QC 统计，不做修剪、不做去噪、不做注释。
+
+【脚本文件名】
+zonode_opt1_s03_fastq_qc.py
+
+【输入】
+- zonode_opt1_s02_analysis_units.tsv
+
+【要求】
+1. 对每个 analysis_unit 的 FASTQ / FASTQ.GZ 统计：
+   - read_count
+   - read_len_min
+   - read_len_median
+   - read_len_max
+   - q20_pct
+   - q30_pct
+2. 必须验证 FASTQ 结构合法性；若文件损坏，必须记录并停止该条，不得静默跳过。
+3. 代码运行时必须检查：
+   - analysis_units.tsv 是否存在
+   - 必需列是否存在
+   - 每条 input_fastq_path 在本地是否存在
+4. 输出：
+   - zonode_opt1_s03_fastq_qc.tsv
+   - zonode_opt1_s03_fastq_qc.log
+5. 结果表必须能与 analysis_unit 一一回连。
+6. 请先联网检索：
+   - Python 中可靠的 FASTQ 质量统计方式
+   - gzip FASTQ 流式读取与结构校验的可靠实现
+
+【特别提醒】
+本轮输出只允许是 QC 与审计信息，不得进行任何分类学解释。
+________________________________________
+对话 4：ITSxpress 单端修剪
+【当前任务】
+执行第 4 步：ITSxpress 单端修剪。
+
+【本轮目标】
+只生成并执行 ITSxpress 单端修剪流程，不做 DADA2，不做注释。
+
+【脚本文件名】
+zonode_opt1_s04_itsxpress_trim.py
+
+【输入】
+- zonode_opt1_s02_analysis_units.tsv
+- zonode_opt1_s03_fastq_qc.tsv
+
+【要求】
+1. 请先联网检索 ITSxpress 最新官方文档、官方仓库 README、必要时 GitHub Issue，核实：
+   - 单端模式参数
+   - ITS1 / ITS2 适配方式
+   - taxa / cluster_id 等参数是否存在、语法是否正确
+2. 代码中不得使用未经核实的 ITSxpress 参数。
+3. 根据 marker 为 ITS1 或 ITS2 分别生成对应命令。
+4. 代码运行时必须检查：
+   - 输入 TSV 是否存在
+   - 必需列是否存在
+   - 每条输入 FASTQ 是否存在
+   - ITSxpress 外部命令是否可用
+5. 输出：
+   - zonode_opt1_s04_trim_manifest.tsv
+   - 每个 analysis_unit 对应的 trimmed FASTQ 文件
+   - zonode_opt1_s04_trim.log
+6. 必须区分：
+   - 命令生成逻辑
+   - 命令执行逻辑
+7. 代码必须在 WSL 兼容前提下书写运行命令。
+
+【特别提醒】
+本轮绝对不做 DADA2，也不允许提前生成后续分析结果。
+________________________________________
+对话 5：DADA2 主去噪
+【当前任务】
+执行第 5 步：DADA2 主去噪。
+
+【本轮目标】
+只做 DADA2 单端主去噪流程，不做 salvage，不做 UNOISE，不做注释。
+
+【脚本文件名】
+zonode_opt1_s05_dada2_primary.R
+
+【输入】
+- zonode_opt1_s02_analysis_units.tsv
+- zonode_opt1_s04_trim_manifest.tsv
+- 每个 analysis_unit 对应的 trimmed FASTQ
+
+【数据契约】
+必须遵循 DADA2 ITS workflow 的原则，特别注意 ITS 不得按 16S 思路固定截断长度。
+
+【锁定参数】
+- truncLen = 0
+- maxEE = 2
+- truncQ = 2
+- minLen = 50
+
+【要求】
+1. 请先联网检索并核实：
+   - DADA2 ITS workflow
+   - ITS 场景下不固定截断长度的依据
+   - 单端实现接口与参数写法
+2. 对每个 analysis_unit 单独处理。
+3. 代码运行时必须检查：
+   - 输入 TSV 是否存在
+   - 必需列是否存在
+   - trimmed FASTQ 是否存在
+   - R 包 dada2 是否可用
+4. 输出每个 analysis_unit 的：
+   - ASV fasta
+   - ASV table tsv
+5. 输出总体汇总：
+   - zonode_opt1_s05_dada2_summary.tsv
+   - zonode_opt1_s05_dada2.log
+6. 若某 analysis_unit 在过滤后 reads.out = 0，必须在汇总表中明确标记，但本轮不做补救重跑。
+7. 若输入文件不存在、R 包缺失、函数接口未确认，必须停止并说明原因。
+8. 不允许把 salvage 或 UNOISE 合并到本轮。
+
+【特别提醒】
+本轮只做主流程，不做补救，不做注释。
+________________________________________
+对话 6：zero-read 补救与 UNOISE 稳健性复核
+【当前任务】
+执行第 6 步：zero-read 补救与 UNOISE 稳健性复核。
+
+【本轮目标】
+仅做两件事：
+1. 对 s05 中 reads.out = 0 的 analysis_unit 生成补救重跑逻辑；
+2. 生成 UNOISE 稳健性复核支路；
+不得替代 s05 主结果。
+
+【脚本文件名】
+zonode_opt1_s06_dada2_salvage_unoise.R
+
+【输入】
+- zonode_opt1_s05_dada2_summary.tsv
+- s05 产生的中间文件
+
+【要求】
+1. 请先联网检索并核实：
+   - DADA2 ITS 场景下 zero-read salvage 的可靠依据
+   - UNOISE3 当前可靠命令与参数来源
+2. 只有 reads.out = 0 的 analysis_unit 才允许进入 salvage 分支。
+3. salvage 的锁定参数：
+   - maxEE = 8
+4. UNOISE 只能作为稳健性复核，不得覆盖主结果。
+5. 代码运行时必须检查：
+   - s05 summary 是否存在
+   - 必需列是否存在
+   - 进入本分支所需文件是否存在
+   - UNOISE / USEARCH 外部命令是否可用
+6. 输出：
+   - zonode_opt1_s06_salvage_summary.tsv
+   - zonode_opt1_s06_unoise_summary.tsv
+   - zonode_opt1_s06_salvage_unoise.log
+7. 若本地缺少 UNOISE / USEARCH 等运行条件，必须停止该分支并明确写出原因，不得伪造结果。
+
+【特别提醒】
+本轮是补救与复核支路，不得改写 s05 主结果。
+________________________________________
+对话 7：PLANiTS 注释与 LCA 折叠
+【当前任务】
+执行第 7 步：PLANiTS 注释与 LCA 折叠。
+
+【本轮目标】
+只做本地 blastn 注释与保守 LCA 折叠，不做同标记一致性分析，不做双标记整合。
+
+【脚本文件名】
+zonode_opt1_s07_planits_annotation.py
+
+【输入】
+- s05 / s06 产生的 ASV fasta
+- 对应 ASV table
+
+【数据契约】
+- 以 PLANiTS 为锚点
+- ITS1 对应 ITS1 数据库
+- ITS2 对应 ITS2 数据库
+- 禁止 Top-N 多数表决
+- 逻辑锁定为：
+  先取最大 bitscore 集合，再取其中最大 pident 集合（并列最优命中集合），然后对 lineage 做 LCA 折叠；
+  如果到 family 级仍冲突，输出 UNRESOLVED_LCA
+
+【过滤条件】
+- pident >= 95
+- qcovs >= 80
+
+【要求】
+1. 请先联网检索并核实：
+   - PLANiTS 可追溯版本与数据库结构
+   - blastn 输出字段
+   - LCA 折叠的保守实现方式
+2. 在 blastn 之前，代码必须先做数据库存在性审计，检查：
+   - 数据库文件是否存在
+   - 数据库版本信息是否可记录
+   - blastn 命令是否可用
+3. 若数据库文件不存在，必须停止并报告，不得假设本地已安装。
+4. 对每个 analysis_unit 输出：
+   - zonode_opt1_s07_<analysis_unit>_annotation.tsv
+   - zonode_opt1_s07_<analysis_unit>_unresolved.fasta
+5. 输出总体文件：
+   - zonode_opt1_s07_database_audit.tsv
+   - zonode_opt1_s07_annotation.log
+6. blastn 命令、outfmt 字段、pandas 处理逻辑必须全部真实可运行，不得杜撰。
+
+【特别提醒】
+本轮不做 support_n / dominant_n 统计。
+________________________________________
+对话 8：同标记多文件观测一致性证据构建
+【当前任务】
+执行第 8 步：同标记多文件观测一致性证据构建。
+
+【本轮目标】
+只在同一样本、同一 marker 内构建多文件观测一致性证据，不做 ITS1 / ITS2 双标记整合。
+
+【脚本文件名】
+zonode_opt1_s08_within_marker_evidence.py
+
+【输入】
+- s07 annotation.tsv
+- s05 / s06 ASV table
+
+【要求】
+1. 先把每个 analysis_unit 的 ASV reads 折叠到 taxon_key。
+2. 分组边界必须严格锁定为：
+   - sample_id + marker
+3. 对每个 sample_id + marker + taxon_key 计算：
+   - support_n
+   - dominant_n
+4. 根据当前方案规则分配 evidence_class，至少包括：
+   - stable_unresolved_signal
+   - stable_high_rank_signal
+   - single_dominant_stable_same_marker
+   - stable_cooccurring_same_marker
+   - unstable_single_observation
+5. 在给代码前，必须先明确写出输入数据结构说明，包括：
+   - annotation 表最少需要哪些列
+   - count 表最少需要哪些列
+   - taxon_key 如何生成
+6. 代码运行时必须检查：
+   - annotation 文件是否存在
+   - count 文件是否存在
+   - 必需列是否齐全
+7. 输出：
+   - zonode_opt1_s08_<sample_id>_<marker>_evidence.tsv
+   - zonode_opt1_s08_taxon_tables.tsv
+   - zonode_opt1_s08_evidence.log
+8. 严禁：
+   - 计算 reads 相对丰度均值
+   - technical replicate 方差
+   - 将 support_n 解释为真实性概率
+   - 将 reads 百分比解释为物理比例
+
+【特别提醒】
+本轮只做同 marker 内部一致性证据，不做双 marker 关系判断。
+________________________________________
+对话 9：ITS1 / ITS2 双标记互补整合
+【当前任务】
+执行第 9 步：ITS1 / ITS2 双标记互补整合。
+
+【本轮目标】
+仅整合同一样本内部的 ITS1 与 ITS2 稳定记录，不写最终文本报告。
+
+【脚本文件名】
+zonode_opt1_s09_dual_marker_integration.py
+
+【输入】
+- zonode_opt1_s08_<sample_id>_ITS1_evidence.tsv
+- zonode_opt1_s08_<sample_id>_ITS2_evidence.tsv
+
+【数据契约】
+只允许 stable 类记录进入整合。
+
+【整合规则】
+- 相同 lineage_path：dual_marker_corroborated
+- 互为祖先：dual_marker_complementary_consensus，并保留较保守共享节点
+- 不兼容：marker_conflict，并上提 LCA
+- 只有单方支持：single_marker_stable
+- 稳定但无法进一步确定：stable_unresolved_supplement
+
+【要求】
+1. 请实现严谨的谱系解析函数，能处理：
+   - 界 / 门 / 纲 / 目 / 科 / 属 / 种
+   - 缺失层级
+   - 不同长度路径
+2. 代码运行时必须检查：
+   - ITS1 / ITS2 evidence 文件是否存在
+   - 必需列是否齐全
+3. 输出：
+   - zonode_opt1_s09_<sample_id>_marker_integrated.tsv
+   - zonode_opt1_s09_<sample_id>_uncertainty.tsv
+   - zonode_opt1_s09_dual_marker.log
+4. 不得让一个 marker 覆盖另一个 marker。
+5. 冲突时只能上提共享节点或登记 conflict，不得多数表决。
+
+【特别提醒】
+本轮只做整合表，不生成自然语言结论。
+________________________________________
+对话 10：单样本文本结论生成
+【当前任务】
+执行第 10 步：单样本文本结论生成。
+
+【本轮目标】
+只为每个 sample_id 生成纯文本报告，不做绘图。
+
+【脚本文件名】
+zonode_opt1_s10_sample_report.py
+
+【输入】
+- zonode_opt1_s09_<sample_id>_marker_integrated.tsv
+- zonode_opt1_s09_<sample_id>_uncertainty.tsv
+- 必要时回连 s08 evidence 文件
+
+【要求】
+1. 对每个 sample_id 输出一个独立报告：
+   - zonode_opt1_s10_<sample_id>_report.txt
+2. 只允许使用以下客观标签：
+   - 单主导谱系稳定
+   - 多谱系共存
+   - 标记间冲突
+   - DNA信号微弱 / 信息不足
+3. 报告中必须原样写入以下限制声明：
+   - 这不是法规意义上的最终真伪鉴定
+   - 这不是基于标签真值的物种认证
+   - 这不是物理成分比例报告
+   - 这只是基于单端 ITS1 / ITS2 与多文件观测重现性形成的单样本内部 DNA 证据画像
+4. 严禁出现以下词汇：
+   - 高纯度
+   - 掺伪
+   - 百分含量
+   - 掺混比例
+   - 真伪
+   - 市场纯度
+   - 疑似替代
+5. 代码运行时必须检查：
+   - marker_integrated 文件是否存在
+   - uncertainty 文件是否存在
+   - 必需列是否齐全
+6. 同时输出：
+   - zonode_opt1_s10_global_limitations.txt
+7. 请使用 Python 完整实现，不得只给模板字符串。
+
+【特别提醒】
+本轮是最终文本结论，不做任何图表。
+________________________________________
+对话 11：最终图表生成
+【当前任务】
+执行第 11 步：最终图表生成。
+
+【本轮目标】
+只依据已经生成且真实存在的 TSV / TXT 结果文件绘图；如果缺文件或缺列，必须放弃对应图，不得补造数据。
+
+【脚本文件名】
+zonode_opt1_s11_plots.py 或 zonode_opt1_s11_plots.R
+（由你根据联网检索后选择更稳妥的语言，但必须说明理由）
+
+【输入】
+只能使用前面步骤已经生成并存在的结果文件，例如：
+- zonode_opt1_s02_analysis_units.tsv
+- zonode_opt1_s03_fastq_qc.tsv
+- zonode_opt1_s07_*_annotation.tsv
+- zonode_opt1_s08_*_evidence.tsv
+- zonode_opt1_s09_*_marker_integrated.tsv
+- zonode_opt1_s10_*_report.txt
+
+【要求】
+1. 在生成绘图代码前，必须先显式写出：
+   - 本轮预期读取哪些输入文件
+   - 每个输入文件至少需要哪些列
+2. 代码开头必须检查：
+   - 这些文件在本地是否存在
+   - 每个文件所需列名是否齐全
+   若任一文件不存在或缺列，则放弃对应图并记录日志，不得猜测列名，不得补造字段，不得为了作图而倒推数据。
+3. 禁止绘制：
+   - read 相对丰度堆叠柱状图
+   - 饼图
+   - 会被误解为物理成分比例的图
+4. 只允许绘制能够由真实输出表支撑的图，例如：
+   - 原始 reads 到保留 ASV 的审计变化图
+   - LCA 折叠层级流向图
+   - 不同 file observations 与双标记的交集图
+   - 单样本证据画像热图
+5. 若某图所需字段不存在，必须放弃该图并说明原因。
+6. 输出：
+   - zonode_opt1_s11_figure01.*
+   - zonode_opt1_s11_figure02.*
+   - ...
+   - zonode_opt1_s11_plot_manifest.tsv
+   - zonode_opt1_s11_plot.log
+7. 每张图都要自动附带 caption 草稿，并强制写入：
+   Read counts are shown on log scale for QC only and must not be interpreted as physical composition.
+8. 若使用 R，请先联网检索 ggplot2 / ggalluvial / ComplexHeatmap / UpSet 相关包的最新语法；
+   若使用 Python，请先联网检索对应绘图库的最新稳定写法。
+
+【特别提醒】
+这是最后一步，绝不允许为了画图而倒推、补造或假设数据。
+________________________________________
+三、当 GPT 开始“为了出代码而出代码”时，追加这段纠偏
+【纠偏追加指令】
+你刚才的回答存在“为了出代码而出代码”的风险，请立即纠正，并严格执行以下要求：
+
+1. 你不能声称已经访问了我的本地 D 盘；你只能重新做“信息明确性审计”。
+2. 你必须把真正的文件检查、列检查、命令检查写进代码开头，而不是在对话中假装已经验证。
+3. 你使用的函数、参数、命令、列名必须逐一核实；未核实的请标为“未确认”，不得猜测。
+4. 你不得假设本地目录下已有某个文件、数据库或列名；必须在代码中检查。
+5. 你不得合并多个步骤；只保留当前步骤。
+6. 你必须补充：
+   - 本步输入结构说明
+   - 运行命令
+   - 输出文件清单
+   - 完成判据与失败判据
+7. 你输出的代码必须是完整可运行脚本，不得包含 TODO、...、pass 或占位逻辑。
+8. 如果当前对话中的关键输入信息未明确，或关键函数/参数/数据库结构未确认，请停止正式分析代码生成，只输出缺失项清单与最小核查脚本。
+________________________________________
+四、实际使用方法
+每次新建对话时，只做这两步：
+先贴：
+全局代码编写约束｜无冲突终稿
+再贴：
+对应步骤的单步任务模板
+不要一次把 11 步全发给 GPT，也不要让它自由发挥。
+如果你想要，我下一条可以把这份终稿再压缩成一个**“最短复制版”**，只保留你实际粘贴时最需要的文本。
+
