@@ -1,0 +1,862 @@
+完整、修改后的可直接复制的细则
+保守科学问题
+在公开可得的单端 ITS1/ITS2 中间层 FASTQ 中，对于标注为单味植物药材的商业样本，DNA 证据是否主要表现为“标签对应植物谱系主导”，还是在严格控制文件层一致性、marker 专属 negative controls、分类冲突和未解信号升级边界后，仍保留可支持的次级谱系证据，从而呈现公开 DNA 证据层面的复杂性模式。
+________________________________________
+研究身份声明
+本研究不是对原作者原始测序—建库—去噪全链的逐步复刻，而是对公开单端 ITS1/ITS2 中间层 FASTQ 所开展的一条 literature-constrained public reanalysis。其分析链条受 2024 年原文对 51 个单味样本、四个 Zenodo 数据入口与 ITS1/ITS2 累积信息价值的论述，以及 2023 年前序原文对原作者原始处理链条与结果组织方式的明确约；但本方案中的最小分析单元注册、前置冻结规则对象、文件层一致性、marker 专属 control-aware 升级上限和样本级证据分层，属于在公开数据现实下建立的新再分析逻辑，而非原作者原文逐步写出的同构流程。
+________________________________________
+总体大纲
+1.	公开单端 FASTQ 审计与最小分析单元定义
+2.	单端 FASTQ 的 trimming、去噪与 zOTU 级证据单位构建
+3.	标签问题约束下、保留非植物与库外解释空间的保守分类注释与冲突裁决
+4.	前置冻结规则对象：参数与证据裁决登记
+5.	同一样本内部、同一 marker 下的文件层一致性证据构建
+6.	marker 专属 negative controls 约束与未解/边缘信号分级
+7.	同一样本内部 ITS1/ITS2 双 marker 保守整合与样本级证据分层
+8.	样本级最终 DNA 证据结论输出与样本集合层模式总结
+________________________________________
+一、全流程统一规范
+________________________________________
+1.1 唯一主实现路线（固定）
+第2步
+•	导入平台：QIIME 2
+•	导入类型：single-end FASTQ manifest
+•	ITS 边界处理：ITSxpress v2
+•	去噪：USEARCH/UNOISE3
+•	输出核心对象：zOTU-level evidence units
+第3步
+•	主参考库：PLANiTS 锁定版本
+•	主比对路线：BLASTn
+•	主裁决方式：固定规则脚本
+•	不使用多分类器并行投票
+•	不使用 naive Bayes 作为主分类器
+第6步
+•	controls 只在 marker 内使用
+•	ITS2 negatives 只用于 ITS2
+•	ITS1 不做 subtractive penalty，但受升级上限约束
+第7步
+•	cross-marker 先做分类学折叠
+•	不合并跨 marker 丰度
+•	样本级高等级升级必须满足双 marker corroboration
+________________________________________
+1.2 目录结构（固定）
+project_root/
+├── raw_data/
+│   ├── zenodo_part1_its1/
+│   ├── zenodo_part2_its2/
+│   ├── zenodo_part3_its2/
+│   └── zenodo_part4_its2_controls/
+├── audit/
+│   ├── file_inventory.tsv
+│   ├── analysis_units.tsv
+│   ├── control_inventory.tsv
+│   ├── unresolved_filenames.tsv
+│   └── boundary_statement.md
+├── frozen_rules/
+│   ├── parameter_register.tsv
+│   ├── adjudication_register.tsv
+│   ├── rule_version.yaml
+│   └── freeze_log.md
+├── manifests/
+│   ├── its1_single_end_manifest.tsv
+│   ├── its2_single_end_manifest.tsv
+│   ├── its2_controls_manifest.tsv
+│   └── sample_metadata.tsv
+├── trim/
+│   ├── its1/
+│   ├── its2/
+│   └── logs/
+├── denoise/
+│   ├── its1/
+│   ├── its2/
+│   └── logs/
+├── taxonomy/
+│   ├── planits/
+│   ├── accepted_name_map.tsv
+│   ├── rank_map.tsv
+│   ├── unresolved_review/
+│   └── logs/
+├── consistency/
+│   ├── its1/
+│   ├── its2/
+│   └── logs/
+├── controls/
+│   ├── its2/
+│   └── logs/
+├── evidence/
+│   ├── marker_level/
+│   ├── sample_level/
+│   └── merged/
+├── reports/
+│   ├── sample_reports/
+│   ├── cohort_summary/
+│   └── methods_audit/
+└── logs/
+________________________________________
+1.3 文件命名规范（固定）
+analysis_unit_id 的唯一格式
+analysis_unit_id = {sample_code}__{marker}__{observation_id}
+例如：
+•	FM19091__ITS1__A
+•	FM19091__ITS1__B
+•	FM19091__ITS2__A
+过程文件命名规则
+{sample_code}.{marker}.{obs}.{stage}.{ext}
+例如：
+FM19091.ITS1.A.raw.fastq.gz
+FM19091.ITS1.A.trimmed.fastq.gz
+FM19091.ITS1.A.filtered.fastq.gz
+FM19091.ITS1.taxonomy.tsv
+FM19091.sample_level.evidence.tsv
+________________________________________
+1.4 manifest 规则（固定）
+manifest 列名固定
+•	sample-id
+•	absolute-filepath
+•	direction
+硬规则
+manifest 中的 sample-id 必须等于 analysis_unit_id，绝不能使用 sample_code。
+示例
+sample-id	absolute-filepath	direction
+FM19091__ITS1__A	/work/raw_data/part1/FM19091_A_ITS1.fastq	forward
+FM19091__ITS1__B	/work/raw_data/part1/FM19091_B_ITS1.fastq	forward
+FM19091__ITS1__C	/work/raw_data/part1/FM19091_C_ITS1.fastq	forward
+________________________________________
+1.5 统一字段规范（固定）
+文件审计表 audit/file_inventory.tsv
+•	record_id
+•	file_name
+•	sample_code
+•	marker
+•	observation_id
+•	analysis_unit_id
+•	is_control
+•	file_path
+•	file_size_bytes
+•	checksum_md5
+•	source_url
+analysis unit 表 audit/analysis_units.tsv
+•	analysis_unit_id
+•	sample_code
+•	marker
+•	observation_id
+•	is_control
+•	input_fastq
+•	status
+zOTU count 表
+•	feature_id
+•	analysis_unit_id
+•	sample_code
+•	marker
+•	observation_id
+•	read_count
+taxonomy 表
+•	feature_id
+•	marker
+•	raw_hit_name
+•	accepted_name
+•	tax_rank
+•	annotation_class
+•	reference_db
+•	bitscore
+•	percent_identity
+•	query_coverage
+•	evalue
+•	conflict_flag
+•	unresolved_flag
+consistency 表
+•	sample_code
+•	marker
+•	taxonomic_unit
+•	detected_obs_count
+•	detected_obs_list
+•	consensus_pass
+•	consensus_class
+sample evidence 表
+•	sample_code
+•	evidence_level
+•	evidence_type
+•	marker_support_its1
+•	marker_support_its2
+•	control_constraint_flag
+•	unresolved_constraint_flag
+•	final_interpretation
+________________________________________
+1.6 前置冻结规则对象（固定）
+frozen_rules/parameter_register.tsv
+字段：
+•	rule_id
+•	step_id
+•	tool_name
+•	parameter_name
+•	parameter_value
+•	parameter_rationale
+•	data_basis
+•	freeze_time
+•	modifiable_after_freeze
+frozen_rules/adjudication_register.tsv
+字段：
+•	rule_id
+•	step_id
+•	decision_name
+•	decision_definition
+•	input_fields_used
+•	pass_condition
+•	downgrade_condition
+•	retain_observation_condition
+•	exception_handling
+•	freeze_time
+•	modifiable_after_freeze
+frozen_rules/rule_version.yaml
+字段：
+•	project_name
+•	rule_version
+•	frozen_by
+•	frozen_time
+•	based_on_documents
+•	notes
+________________________________________
+二、最终固定参数与判定阈值
+________________________________________
+2.1 第2步固定参数（唯一值）
+ITSxpress
+ITS1
+•	--single_end
+•	--region ITS1
+•	--taxa All
+ITS2
+•	--single_end
+•	--region ITS2
+•	--taxa All
+引物处理规则（固定）
+不再额外执行独立引物剪切步骤；ITSxpress 作为唯一 ITS 区域边界处理工具。
+________________________________________
+2.2 UNOISE3 固定参数（唯一值）
+全局唯一序列预过滤
+•	在同一 marker 的全数据集中，去除总出现次数 < 10 的唯一序列
+UNOISE3
+•	minsize = 10
+后续 observation 层最低保留
+•	read_count >= 5
+后续 sample-marker 聚合相对丰度最低保留
+•	relative_abundance >= 0.002（即 0.2%）
+________________________________________
+2.3 relative_abundance 的唯一计算定义（固定）
+硬规则
+所有 relative_abundance 的计算，统一基于去噪后、分类前、control penalty 前的原始 zOTU count table，在单个 sample-marker-observation 内的总 reads 作为分母。
+公式：
+relative_abundance(feature, observation) =
+feature_count / total_zotu_reads_of_that_sample_marker_observation
+这一定义后续不得改写
+________________________________________
+2.4 文件层一致性阈值（固定）
+一致性通过
+•	同一 sample_code
+•	同一 marker
+•	同一 taxonomic_unit
+•	至少 2 / 3 个 observation 检出
+•	且每个有效 observation：
+•	reads >= 5
+•	聚合 relative_abundance >= 0.002
+一致性分类
+•	REPRODUCIBLE_WITHIN_MARKER
+•	PARTIAL_REPEAT_WITH_DROPOUT
+•	SINGLE_OBSERVATION_ONLY
+•	INSUFFICIENT_SIGNAL
+________________________________________
+2.5 高优先级未解信号阈值（固定）
+某未解信号进入 pending_review_unresolved 必须同时满足：
+1.	至少 2 个 observation 检出
+2.	每个 observation reads >= 5
+3.	sample-marker 聚合 relative_abundance >= 0.002
+4.	在该 sample-marker 内 abundance 排名前 5
+5.	不被对应 marker controls 直接解释掉
+否则仅保留为：
+•	retained_unresolved_observation
+或
+•	low_priority_unresolved
+________________________________________
+2.6 次级谱系证据阈值（固定）
+进入 secondary_lineage_evidence 必须同时满足：
+1.	同一 marker 内达到 2/3 observation 一致性
+2.	每个有效 observation reads >= 5
+3.	sample-marker 聚合 relative_abundance >= 0.002
+4.	不被对应 marker controls 直接解释
+5.	不只是标签主导谱系在不同 marker 下的简单分辨率差异
+6.	若仅由 ITS1 支持，则只能保留为较低等级观察，不得升级为高等级次级谱系证据
+________________________________________
+2.7 标签主导证据阈值（固定）
+单 marker 标签支持证据
+•	2/3 observation 一致性
+•	每个 observation reads >= 5
+•	聚合 relative_abundance >= 0.002
+双 marker 相容标签支持证据
+•	ITS1 与 ITS2 都有标签相关支持
+•	共识折叠后落到同一共享分类节点
+•	不被 controls 显著削弱
+高等级标签主导证据
+必须同时满足：
+1.	双 marker 相容支持成立
+2.	至少一个 marker 中该标签相关谱系 abundance 排名第 1
+3.	另一个 marker 中未被更强非标签谱系压倒
+4.	不存在高等级未解/冲突约束阻断升级
+________________________________________
+2.8 Step 3 分类注释固定参数（唯一值）
+主比对程序
+•	BLASTn
+固定阈值
+•	e-value <= 1e-20
+•	percent_identity >= 97
+•	query_coverage >= 90
+tie-break 顺序
+1.	最高 bitscore
+2.	最高 percent identity
+3.	最高 query coverage
+4.	accepted-name 合并
+5.	折叠到最低共同分类节点
+________________________________________
+2.9 ITS2 control penalty 公式（唯一公式）
+定义
+对 ITS2 个 feature f、每个 observation o：
+penalized_count(f, o) = raw_count(f, o) - max_control_count(f)
+其中：
+max_control_count(f) = 该 feature 在所有 ITS2 negative controls 中的最大 reads 数
+判定
+•	penalized_count <= 0
+→ CONTROL_EXPLAINED
+•	1 <= penalized_count < 5
+→ RETAIN_OBSERVATION_ONLY
+•	penalized_count >= 5
+→ 可进入后续一致性与升级判断
+ITS1 规则
+•	不做 subtractive penalty；
+•	但 ITS1 单独支持的信号不得升级为样本级高等级结论。
+________________________________________
+2.10 cross-marker folding 机器可读对象（固定）
+必须维护两张表：
+taxonomy/rank_map.tsv
+字段：
+•	rank_name
+•	rank_level
+•	parent_rank
+•	child_rank_allowed
+建议映射：
+•	kingdom = 1
+•	phylum = 2
+•	class = 3
+•	order = 4
+•	family = 5
+•	genus = 6
+•	species = 7
+taxonomy/accepted_name_map.tsv
+字段：
+•	raw_name
+•	accepted_name
+•	accepted_rank
+•	source_db
+•	synonym_flag
+•	note
+folding 规则
+1.	先做 accepted-name normalization；
+2.	再按 rank_map 比较；
+3.	若：
+•	同 accepted species → 一致；
+•	同 genus 不同 species → 折到 genus；
+•	genus / family 不对称 → 折到 family；
+•	无共享可解释节点 → UNRESOLVED_CROSS_MARKER_CONFLICT
+________________________________________
+三、详细实验细则
+________________________________________
+第1步：公开单端 FASTQ 审计与最小分析单元定义
+1. 本步目的
+确认公开数据对象、样本层级与 marker 层级，建立后续所有代码和判定规则的唯一起点。
+2. 本步输入
+•	Zenodo 原始 FASTQ
+•	Zenodo 页面元数据
+•	论文数据可用性描述
+3. 本步输出
+•	audit/file_inventory.tsv
+•	audit/analysis_units.tsv
+•	audit/control_inventory.tsv
+•	audit/unresolved_filenames.tsv
+•	audit/boundary_statement.md
+4. 使用的软件 / 方法
+•	Python / R 文件扫描
+•	md5sum
+•	正则解析
+5. 参数与冻结规则
+冻结：
+•	文件名解析规则
+•	marker 提取规则
+•	control 识别规则
+•	analysis_unit_id 命名规则
+6. 操作流程
+1.	下载全部 Zenodo 文件；
+2.	校验 md5；
+3.	解析文件名；
+4.	生成 analysis_unit_id = sample_code__marker__observation_id；
+5.	写入 inventory 与 analysis_units；
+6.	写入 controls；
+7.	生成边界声明。
+7. 判定 / 裁决规则
+•	解析成功且 checksum 合格 → 通过；
+•	失败 → 人工审计，不进主流程。
+8. 失败分支
+•	checksum 不符 → FAILED_CHECKSUM
+•	marker 无法识别 → UNKNOWN_MARKER
+•	observation 不可识别 → UNKNOWN_OBS
+9. 代码实现建议
+函数：
+•	scan_raw_files()
+•	parse_filename()
+•	build_analysis_unit_id()
+•	write_audit_tables()
+10. 本步限制
+不产生生物学结论。
+11. 本步学术论文（必须带 DOI）
+•	Klymus KE, et al. The MIEM guidelines: Minimum information for reporting of environmental metabarcoding data. DOI: 10.3897/mbmg.8.128689
+•	Takahashi M, et al. A metadata checklist and data formatting guidelines to make eDNA FAIR (Findable, Accessible, Interoperable and Reusable). DOI: 10.1002/edn3.70100
+•	Mück B, et al. Three-tiered authentication of herbal Traditional Chinese Medicine ingredients used in women’s health provides progressive qualitative and quantitative insight. DOI: 10.3389/fphar.2024.1353434
+•	Mück B, et al. Complementary authentication of Chinese herbal products to treat endometriosis using DNA metabarcoding and HPTLC shows a high level of variability. DOI: 10.3389/fphar.2023.1305410
+12. 本步官方文档 / 社区讨论
+•	Zenodo 记录页
+•	原论文数据可用性说明
+________________________________________
+第2步：单端 FASTQ 的 trimming、去噪与 zOTU 级证据单位构建
+1. 本步目的
+把公开单端 FASTQ 转换成统一的 zOTU-level evidence units，以便进入后续分类、稳定性与样本级证据判读。
+2. 本步输入
+•	audit/analysis_units.tsv
+•	FASTQ
+•	frozen_rules/parameter_register.tsv
+3. 本步输出
+•	manifests/its1_single_end_manifest.tsv
+•	manifests/its2_single_end_manifest.tsv
+•	trim/its1/*.trimmed.fastq.gz
+•	trim/its2/*.trimmed.fastq.gz
+•	denoise/its1/zotus_ITS1.fasta
+•	denoise/its2/zotus_ITS2.fasta
+•	denoise/its1/zotu_table_ITS1.tsv
+•	denoise/its2/zotu_table_ITS2.tsv
+•	denoise/logs/*.log
+4. 使用的软件 / 方法
+•	QIIME 2 import（仅用于规范导入与质量概览）
+•	ITSxpress v2
+•	USEARCH / UNOISE3
+•	自定义 zOTU table 构建脚本
+5. 参数与冻结规则
+固定：
+•	manifest 的 sample-id = analysis_unit_id
+•	ITSxpress：
+•	--single_end
+•	--region ITS1/ITS2
+•	--taxa All
+•	全局唯一序列预过滤：count >= 10
+•	UNOISE3：minsize = 10
+•	observation 最低 reads：>= 5
+•	sample-marker 最低 relative_abundance：>= 0.002
+6. 操作流程
+1.	按 marker 生成 ITS1 / ITS2 manifest；
+2.	用 QIIME 2 导入并做质量概览；
+3.	ITSxpress 单端 trimming；
+4.	按 marker 汇总 trimmed reads；
+5.	全局去重复；
+6.	去除全 marker 中出现次数 <10 的唯一序列；
+7.	对剩余唯一序列运行 UNOISE3；
+8.	得到 zotus.fasta；
+9.	将每个 observation reads 映射回 zOTUs；
+10.	生成 zotu_table_ITS1.tsv / zotu_table_ITS2.tsv。
+7. 判定 / 裁决规则
+•	trimming 成功 + UNOISE3 成功 + zOTU table 成功 → 通过；
+•	某 observation trimming 后为空 → 标记 EMPTY_AFTER_TRIM
+•	某 marker 无 zOTU → 标记 NO_ZOTUS_GENERATED
+•	observation 中某 zOTU reads < 5 → 不进入高等级后续
+8. 失败分支
+•	ITSxpress 失败 → TRIMMING_FAILED
+•	UNOISE3 失败 → DENOISE_FAILED
+•	mapping 失败 → ZOTU_MAPPING_FAILED
+9. 代码实现建议
+函数：
+•	build_manifest(marker)
+•	run_qiime_import_for_qc()
+•	run_itsxpress_single()
+•	concat_trimmed_reads(marker)
+•	dereplicate_marker_reads()
+•	filter_uniques_by_global_count(min_count=10)
+•	run_unoise3(minsize=10)
+•	map_reads_to_zotus()
+•	build_zotu_table()
+10. 本步限制
+•	本步对象是 zOTUs，不是原作者 OTU 的逐步复刻；
+•	本步适配的是公开单端中间层输入，不是原始 paired-end。
+11. 本步学术论文（必须带 DOI）
+•	Mück B, et al. Complementary authentication of Chinese herbal products to treat endometriosis using DNA metabarcoding and HPTLC shows a high level of variability. DOI: 10.3389/fphar.2023.1305410
+•	Edgar RC. UNOISE2: improved error-correction for Illumina 16S and ITS amplicon sequencing. DOI: 10.1101/081257
+•	Einarsson SV, Rivers AR. ITSxpress version 2: software to rapidly trim internal transcribed spacer sequences with quality scores for amplicon sequencing. DOI: 10.1128/spectrum.00601-24
+•	Mück B, et al. Three-tiered authentication of herbal Traditional Chinese Medicine ingredients used in women’s health provides progressive qualitative and quantitative insight. DOI: 10.3389/fphar.2024.1353434
+12. 本步官方文档 / 社区讨论
+•	q2-ITSxpress 官方文档（merged reads 与 DADA2 的限制）
+•	USEARCH UNOISE3 官方文档
+•	原研究 2023 方法链
+________________________________________
+第3步：标签问题约束下、保留非植物与库外解释空间的保守分类注释与冲突裁决
+1. 本步目的
+把 zOTU 对象转成可用于标签主导/次级谱系/未解判定的分类对象。
+2. 本步输入
+•	zotus_ITS1.fasta
+•	zotus_ITS2.fasta
+•	zotu_table_ITS1.tsv
+•	zotu_table_ITS2.tsv
+•	label_info 表
+•	PLANiTS
+•	accepted_name_map.tsv
+•	rank_map.tsv
+•	adjudication_register.tsv
+3. 本步输出
+•	taxonomy/its1.taxonomy.tsv
+•	taxonomy/its2.taxonomy.tsv
+•	taxonomy/annotation_decision_log.tsv
+•	taxonomy/unresolved_review.tsv
+4. 使用的软件 / 方法
+•	BLASTn
+•	PLANiTS
+•	自定义裁决脚本
+5. 参数与冻结规则
+固定：
+•	program = blastn
+•	evalue <= 1e-20
+•	percent_identity >= 97
+•	query_coverage >= 90
+•	tie-break 顺序固定
+•	accepted-name normalization 固定
+6. 操作流程
+1.	锁定 PLANiTS 版本；
+2.	对 ITS1/ITS2 zOTUs 分别跑 BLASTn；
+3.	读取 raw hits；
+4.	做 accepted-name normalization；
+5.	按 tie-break 规则保留命中集合；
+6.	应用分类裁决：
+•	标签一致
+•	标签兼容
+•	非标签植物
+•	高层级未解植物
+•	待核验未解
+•	非主轴未解/非植物
+7.	输出 taxonomy 与 decision log。
+7. 判定 / 裁决规则
+•	先 accepted-name 归一化；
+•	再按 bitscore → identity → coverage 排序；
+•	若仍并列，则折叠到共同节点；
+•	非植物与库外信号保留，不压成噪声。
+8. 失败分支
+•	参考库缺失 → 停止
+•	标签映射缺失 → 不做标签主导，只做结构描述
+•	某 marker 全部未解 → 标记高不确定性
+9. 代码实现建议
+函数：
+•	run_blastn()
+•	load_accepted_name_map()
+•	normalize_names()
+•	apply_tie_break_rules()
+•	apply_annotation_classes()
+10. 本步限制
+植物主线服务于标签问题，不是唯一真实框架。
+11. 本步学术论文（必须带 DOI）
+•	Banchi E, et al. PLANiTS: a curated sequence reference dataset for plant ITS DNA metabarcoding. DOI: 10.1093/database/baz155
+•	Quaresma A, et al. Semi-automated sequence curation for reliable reference datasets in ITS2 vascular plant DNA (meta-)barcoding. DOI: 10.1038/s41597-024-02962-5
+•	San Martin G, et al. How reliable is metabarcoding for pollen identification? An evaluation of different taxonomic assignment strategies by cross-validation. DOI: 10.7717/peerj.16567
+•	Pappalardo P, et al. Taxon-specific BLAST percent identity thresholds for identification of unknown sequences using metabarcoding. DOI: 10.1111/2041-210X.70147
+12. 本步官方文档 / 社区讨论
+•	PLANiTS GitHub
+•	BLAST docs
+•	原研究 BLAST/ASAP 思路说明
+________________________________________
+第4步：前置冻结规则对象——参数与证据裁决登记
+1. 本步目的
+把参数和裁决标准变成可追溯、可外部审计的对象。
+2. 本步输入
+•	第2步参数
+•	第3步裁决框架
+•	controls 信息
+3. 本步输出
+•	frozen_rules/parameter_register.tsv
+•	frozen_rules/adjudication_register.tsv
+•	frozen_rules/rule_version.yaml
+•	frozen_rules/freeze_log.md
+4. 使用的软件 / 方法
+•	TSV/YAML 配置
+•	schema 校验脚本
+5. 参数与冻结规则
+此步本身是冻结动作。
+6. 操作流程
+1.	汇总全部参数；
+2.	汇总全部判定规则；
+3.	写入 register；
+4.	分配 rule_id；
+5.	冻结并记录；
+6.	后续所有代码仅从 register 读取。
+7. 判定 / 裁决规则
+•	register 外规则不得进入主流程；
+•	register 修改必须升级 version 并重跑。
+8. 失败分支
+•	schema 不合法 → 停止
+•	runtime 与 register 不一致 → 停止
+9. 代码实现建议
+函数：
+•	validate_register_schema()
+•	freeze_register()
+•	assert_runtime_params()
+10. 本步限制
+本步不产生生物学结果。
+11. 本步学术论文（必须带 DOI）
+•	Polanco FA, et al. A Confidence Scoring Procedure for eDNA Metabarcoding Records and Its Application to a Global Marine Fish Dataset. DOI: 10.1002/edn3.70077
+•	Shaffer MR, et al. Observation Bias in Metabarcoding. DOI: 10.1111/1755-0998.14119
+•	Jones JI, et al. Sources of uncertainty in DNA metabarcoding of whole communities: Implications for its use in biomonitoring. DOI: 10.1111/2041-210X.70093
+12. 本步官方文档 / 社区讨论
+•	QIIME 2 docs
+•	reproducibility guides
+________________________________________
+第5步：同一样本内部、同一 marker 下的文件层一致性证据构建
+1. 本步目的
+识别样本内部 marker 层的可重复信号。
+2. 本步输入
+•	taxonomy 表
+•	zOTU count 表
+•	analysis_units 表
+•	frozen adjudication rules
+3. 本步输出
+•	consistency/its1/marker_consistency_ITS1.tsv
+•	consistency/its2/marker_consistency_ITS2.tsv
+•	consistency/logs/consistency_decision_log.tsv
+4. 使用的软件 / 方法
+•	聚合脚本
+•	规则引擎
+5. 参数与冻结规则
+固定：
+•	min_obs_for_consensus = 2
+•	min_reads = 5
+•	min_rel_abund = 0.002
+6. 操作流程
+1.	按 sample_code + marker + taxonomic_unit 聚合；
+2.	统计 observation 覆盖数；
+3.	应用一致性规则；
+4.	输出 consistency 表。
+7. 判定 / 裁决规则
+•	>=2 obs 且满足 reads/abundance → REPRODUCIBLE_WITHIN_MARKER
+•	1 obs → SINGLE_OBSERVATION_ONLY
+•	部分掉落 → PARTIAL_REPEAT_WITH_DROPOUT
+8. 失败分支
+•	observation 不足 → 不能顶格
+•	count 全 0 → 标记为空
+9. 代码实现建议
+函数：
+•	compute_marker_consistency()
+•	classify_consensus()
+10. 本步限制
+不是技术重复分析。
+11. 本步学术论文（必须带 DOI）
+•	Jones JI, et al. Sources of uncertainty in DNA metabarcoding of whole communities: Implications for its use in biomonitoring. DOI: 10.1111/2041-210X.70093
+•	Veríssimo J, et al. Navigating Methodological Trade-Offs in eDNA Metabarcoding Biodiversity Monitoring: Insights From a Mediterranean Watershed. DOI: 10.1111/1755-0998.14082
+•	Polanco FA, et al. A Confidence Scoring Procedure for eDNA Metabarcoding Records and Its Application to a Global Marine Fish Dataset. DOI: 10.1002/edn3.70077
+12. 本步官方文档 / 社区讨论
+•	repeatability / low abundance discussion
+________________________________________
+第6步：marker 专属 negative controls 约束与未解/边缘信号分级
+1. 本步目的
+用 marker 内 controls 约束次级谱系和未解信号。
+2. 本步输入
+•	consistency 表
+•	ITS2 controls
+•	taxonomy 表
+•	frozen adjudication rules
+3. 本步输出
+•	controls/its2/control_aware_signal_table.tsv
+•	controls/its2/control_penalty_log.tsv
+•	controls/logs/control_decision_log.tsv
+4. 使用的软件 / 方法
+•	control penalty 脚本
+5. 参数与冻结规则
+固定：
+•	subtractive penalty 公式
+•	min_reads_after_penalty = 5
+•	ITS1 上限规则
+6. 操作流程
+1.	汇总所有 ITS2 negatives；
+2.	计算每个 feature 的 max_control_count；
+3.	对样本 ITS2 feature 做：
+penalized_count = raw_count - max_control_count
+4.	根据 penalized_count 分类：
+•	CONTROL_EXPLAINED
+•	RETAIN_OBSERVATION_ONLY
+•	PASS_CONTROL_PENALTY
+5.	ITS1 不减法，但强制升级上限。
+7. 判定 / 裁决规则
+•	penalized_count <= 0 → CONTROL_EXPLAINED
+•	1–4 → RETAIN_OBSERVATION_ONLY
+•	>=5 → 可进入后续升级
+•	ITS1 单独支持 → 不能顶格
+8. 失败分支
+•	controls 不可读 → ITS2 整体降级为 CONTROL_AUDIT_FAILED
+•	无 controls → 明确写入限制
+9. 代码实现建议
+函数：
+•	get_max_control_count()
+•	apply_subtractive_penalty()
+•	classify_control_status()
+10. 本步限制
+controls 不能证明真实来源，只能限制升级。
+11. 本步学术论文（必须带 DOI）
+•	Shaffer MR, et al. Observation Bias in Metabarcoding. DOI: 10.1111/1755-0998.14119
+•	Kyle KE, Klassen JL. Untrimmed ITS2 metabarcode sequences cause artificially reduced abundances of specific fungal taxa. DOI: 10.1128/AEM.01537-24
+•	Polanco FA, et al. A Confidence Scoring Procedure for eDNA Metabarcoding Records and Its Application to a Global Marine Fish Dataset. DOI: 10.1002/edn3.70077
+12. 本步官方文档 / 社区讨论
+•	controls discussion
+•	decontam-style control reasoning
+________________________________________
+第7步：同一样本内部 ITS1/ITS2 双 marker 保守整合与样本级证据分层
+1. 本步目的
+生成样本级标签主导、次级谱系、信息不足证据。
+2. 本步输入
+•	ITS1/ITS2 consistency 表
+•	control-aware 结果
+•	taxonomy 表
+•	rank_map
+•	accepted_name_map
+•	frozen adjudication rules
+3. 本步输出
+•	evidence/sample_level/sample_evidence.tsv
+•	evidence/merged/marker_fold_log.tsv
+•	evidence/merged/parallel_support_table.tsv
+4. 使用的软件 / 方法
+•	rank normalization
+•	synonym normalization
+•	taxonomy folding
+•	evidence grading
+5. 参数与冻结规则
+固定：
+•	folding rule
+•	high-grade dominance rule
+•	secondary lineage rule
+•	information insufficiency rule
+6. 操作流程
+1.	先做 accepted-name normalization；
+2.	用 rank_map 标准化层级；
+3.	对标签相关信号做 cross-marker folding；
+4.	不合并丰度，只并行显示 ITS1 / ITS2 支持度；
+5.	按 frozen rules 输出：
+•	单 marker 标签支持
+•	双 marker 相容支持
+•	高等级标签主导
+•	次级谱证据
+•	信息不足
+7. 判定 / 裁决规则
+•	同 accepted species → 一致；
+•	同 genus 不同 species → 折 genus；
+•	genus/family 不对称 → 折 family；
+•	无共享节点 → UNRESOLVED_CROSS_MARKER_CONFLICT
+•	单 marker 稳定 ≠ 高等级成立；
+•	高等级标签主导必须满足双 marker corroboration。
+8. 失败分支
+•	只有一个 marker 有效 → 最多单 marker 支持
+•	大量未解 → 高未解约束样本
+9. 代码实现建议
+函数：
+•	normalize_taxonomy_names()
+•	map_rank_levels()
+•	fold_cross_marker_taxonomy()
+•	grade_sample_level_evidence()
+10. 本步限制
+不做跨 marker 定量合并。
+11. 本步学术论文（必须带 DOI）
+•	Prieto AE, et al. Finding the perfect pairs: A matchmaking of plant markers and primers for multi-marker eDNA metabarcoding. DOI: 10.1111/1755-0998.13937
+•	Winand R, et al. Investigating fungal diversity through metabarcoding for environmental samples: assessment of ITS1 and ITS2 Illumina sequencing using multiple defined mock communities with different classification methods and reference databases. DOI: 10.1186/s12864-025-11917-y
+•	Polanco FA, et al. A Confidence Scoring Procedure for eDNA Metabarcoding Records and Its Application to a Global Marine Fish Dataset. DOI: 10.1002/edn3.70077
+•	Mück B, et al. Three-tiered authentication of herbal Traditional Chinese Medicine ingredients used in women’s health provides progressive qualitative and quantitative insight. DOI: 10.3389/fphar.2024.1353434
+12. 本步官方档 / 社区讨论
+•	marker integration discussion
+•	cumulative insight discussion
+________________________________________
+第8步：样本级最终 DNA 证据结论输出与样本集合层模式总结
+1. 本步目的
+输出最终可写入论文和报告的 DNA 证据结论。
+2. 本步输入
+•	sample evidence 表
+•	未升级信号表
+•	boundary statement
+•	rule version
+3. 本步输出
+•	reports/sample_reports/{sample_code}.report.md
+•	reports/cohort_summary/cohort_evidence_summary.tsv
+•	reports/methods_audit/final_boundary_statement.md
+4. 使用的软件 / 方法
+•	模板化报告生成
+5. 参数与冻结规则
+固定：
+•	允许结论词
+•	禁止越界词
+•	报告模板
+6. 操作流程
+1.	读取样本级证据；
+2.	生成样本报告；
+3.	生成 cohort 总结；
+4.	输出边界声明。
+7. 判定 / 裁决规则
+允许：
+•	标签主导证据较强
+•	存在经约束后仍保留的次级谱系证据
+•	marker 不对称限制了解释力度
+•	公开 DNA 证据层面信息不足
+禁止：
+•	真伪已证实
+•	掺伪已证实
+•	市场纯度已证明
+•	真实成分比例已确定
+8. 失败分支
+•	样本无证据 → INSUFFICIENT_DNA_EVIDENCE
+•	cohort 整体弱 → 输出“整体信息不足”
+9. 代码实现建议
+函数：
+•	render_sample_report()
+•	render_cohort_summary()
+•	render_boundary_statement()
+10. 本步限制
+终点仅限 DNA 证据层。
+11. 本步学术论文（必须带 DOI）
+•	Jones JI, et al. Sources of uncertainty in DNA metabarcoding of whole communities: Implications for its use in biomonitoring. DOI: 10.1111/2041-210X.70093
+•	Polanco FA, et al. A Confidence Scoring Procedure for eDNA Metabarcoding Records and Its Application to a Global Marine Fish Dataset. DOI: 10.1002/edn3.70077
+•	Yuan H, et al. DNA Metabarcoding: Current Applications and Challenges. DOI: 10.1021/acs.jafc.5c06002
+•	Mück B, et al. Three-tiered authentication of herbal Traditional Chinese Medicine ingredients used in women’s health provides progressive qualitative and quantitative insight. DOI: 10.3389/fphar.2024.1353434
+12. 本步官方文档 / 社区讨论
+•	methods writing guidance
+•	uncertainty reporting guidance
+________________________________________
+四、全流程最容易被审稿人质疑的点与固定防守
+1. “你是不是复刻了原作者流程？”
+固定防守： 不是，本研究明确为 literature-constrained public reanalysis。
+2. “A/B/C 是不是技术重复？”
+固定防守： 不是，只作为文件层一致性辅助证据。
+3. “manifest 里样本是不是撞了？”
+固定防守： 不会，manifest sample-id 固定为 analysis_unit_id。
+4. “参数是不是看完结果才调？”
+固定防守： 不会，参数与裁决前置冻结并外部可审计。
+5. “controls 为什么不对称？”
+固定防守： ITS2 subtractive penalty；ITS1 不借用 ITS2 controls，并受升级上限约束。
+6. “relative abundance 到底怎么算？”
+固定防守： 唯一定义：去噪后、分类前、control 前，以 sample-marker-observation 的总 zOTU reads 为分母。
+7. “你怎么做 cross-marker folding？”
+固定防守： 先 accepted-name normalization，再 rank_map 折叠，规则机器可读且前置冻结。
+________________________________________
+五、最终一句判断
+现在这份版本，已经可以直接作为：
+可直接编码的唯一实现版细则
+来用。
+也就是说，你现在可以开始实现：
+•	Step 1：文件审计
+•	Step 2：ITSxpress + UNOISE3 + zOTU table
+•	Step 3：BLAST + taxonomy adjudication
+•	Step 4：frozen registers
+•	Step 5：marker consistency
+•	Step 6：ITS2 control penalty
+•	Step 7：cross-marker folding
+•	Step 8：sample reports
+
