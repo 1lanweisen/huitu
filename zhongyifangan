@@ -1,0 +1,377 @@
+保守科学问题
+在公开可得的单端 ITS1/ITS2 中间层 FASTQ 中，对于标注为单味植物药材的商业样本，DNA 证据是否主要表现为“标签对应植物谱系主导”，还是在严格控制文件层一致性、marker 专属 negative controls、分类冲突和未解信号升级边界后，仍保留可支持的次级谱系证据，从而呈现公开 DNA 证据层面的复杂性模式。
+________________________________________
+研究身份声明
+本研究不是对原作者原始测序—建库—去噪全链的逐步复刻，而是对公开单端 ITS1/ITS2 中间层 FASTQ 所开展的一条 literature-constrained public reanalysis。其分析链条受 2024 年原文对 51 个单味样本、四个 Zenodo 数据入口与 ITS1/ITS2 累积信息价值的论述，以及 2023 年前序原文对原作者原始处理链条与结果组织方式的明确约束；但本方案中的最小分析单元注册、前置冻结规则对象、文件层一致性、marker 专属 control-aware 升级上限和样本级证据分层，属于在公开数据现实下建立的新再分析逻辑，而非原作者原文逐步写出的同构流程。
+________________________________________
+总体大纲
+1.	公开单端 FASTQ 审计与最小分析单元定义
+2.	单端 FASTQ 的序列变体级证据单位构建
+3.	标签问题约束下、保留非植物与库外解释空间的保守分类注释与冲突裁决
+4.	前置冻结规则对象：参数与证据裁决登记
+5.	同一样本内部、同一 marker 下的文件层一致性证据构建
+6.	marker 专属 negative controls 约束与未解/边缘信号分级
+7.	同一样本内部 ITS1/ITS2 双 marker 保守整合与样本级证据分层
+8.	样本级最终 DNA 证据结论输出与样本集合层模式总结
+________________________________________
+第1步：公开单端 FASTQ 审计与最小分析单元定义
+【数据来源】
+•	Zenodo 四个公开数据记录中的全部 FASTQ 文件
+•	Zenodo 页面公开提供的文件名、大小、md5/checksum
+•	2024 对应原文与 2023 前序方法原文
+【方法】
+本步只做公开数据层级审计，不做任何生物学推断。
+首先对每个公开 FASTQ 固化以下字段：
+•	sample_code
+•	file_observation_id（A/B/C）
+•	marker（ITS1/ITS2）
+•	file_name
+•	file_size
+•	checksum
+•	source_record_id
+•	control_status（sample / negative control）
+随后定义唯一合法的最小分析单元：
+analysis_unit = sample_code + file_observation_id + marker
+本步必须在审计文本中写死以下数据边界：
+1.	当前输入是公开样本拆分后的单端 FASTQ；
+2.	当前公开文件结构并不能直接证明这些文件一定属于 joined reads；因此后续流程统一按“单端 FASTQ”处理；
+3.	ITS1 与 ITS2 是两个独立 marker，不是配对读段；
+4.	A/B/C 只能定义为同一样本代码下的多文件观测；
+5.	当前公开信息不足以证明 A/B/C 为严格技术重复，因此不得据此进行技术重复误差分解；
+6.	本研究是公开中间层 FASTQ 的再分析，不宣称重建原作者原始 MiSeq 全链。
+本步的目标，是把公开仓储中的文件对象转化为后续可追踪调用的分析单位，并从一开始写清楚研究身份。
+它不是原文流程的逐步复刻起点，而是新再分析链的数据对象起点。
+【本步输出】
+•	公开 FASTQ 审计清单
+•	最小分析单元注册文件
+•	negative controls 注册文件
+•	数据边界与研究身份声明文本
+【本步学术文献】
+•	Klymus KE, et al. The MIEM guidelines: Minimum information for reporting of environmental metabarcoding data. DOI: 10.3897/mbmg.8.128689
+•	Takahashi M, et al. A metadata checklist and data formatting guidelines to make eDNA FAIR (Findable, Accessible, Interoperable and Reusable). DOI: 10.1002/edn3.70100
+•	Mück B, et al. Three-tiered authentication of herbal Traditional Chinese Medicine ingredients used in women’s health provides progressive qualitative and quantitative insight. DOI: 10.3389/fphar.2024.1353434
+•	Mück B, et al. Complementary authentication of Chinese herbal products to treat endometriosis using DNA metabarcoding and HPTLC shows a high level of variability. DOI: 10.3389/fphar.2023.1305410
+【本步官方文档/社区依据】
+•	Zenodo 四个公开数据记录
+•	原论文的数据可用性说明页
+【步骤衔接依据】
+这一步的作用不是“铺流程”，而是确认：后续关于标签主导、次级谱系和复杂性模式的全部结论，究竟建立在什么公开数据层级上。只有先固定分析单位与研究边界，后续的序列证据构建、分类注释与样本级判读才不会漂移。
+________________________________________
+第2步：单端 FASTQ 的序列变体级证据单位构建
+【数据来源】
+•	第1步输出的最小分析单元注册文件
+•	第1步登记的 ITS1 / ITS2 单端 FASTQ
+•	第1步登记的 negative control 文件
+【方法】
+本步以 analysis_unit 为单位逐个处理；ITS1 与 ITS2 分开运行。
+本研究在此明确锁死后续所有分析的核心对象为：
+序列变体级证据单位（sequence-variant-level evidence units）
+也就是说，本研究不在 OTU / ASV / 聚类对象之间摇摆，不声称复刻原作者的 UNOISE-OTU 链，而是在公开单端 FASTQ 层统一构建可比较的序列变体级对象，用于后续全部分类、稳定性和样本级证据判断。
+每个 analysis_unit 依次完成：
+1.	必要的引物/边界处理；
+2.	单端质量控制；
+3.	去重复；
+4.	序列变体级证据单位构建；
+5.	嵌合体识别与移除；
+6.	输出该 analysis_unit 的代表序列对象与计数对象。
+本步不在正文写死全部具体数值，但必须明确：
+质量控制与序列变体构建所需参数，并不是结果出来后再调，而必须在正式分类注释和样本级判读前，通过独立的前置登记对象完成冻结。
+也就是说，参数如何确定、何时冻结、冻结后能否回调，都必须在进入后续步骤前先写死。
+【本步输出】
+•	ITS1 序列变体代表序列文件
+•	ITS1 序列变体计数表
+•	ITS2 序列变体代表序列文件
+•	ITS2 序列变体计数表
+•	单端质量控制与变体构建日志
+【本步学术文献】
+•	Callahan BJ, et al. DADA2: High-resolution sample inference from Illumina amplicon data. DOI: 10.1038/nmeth.3869
+•	Einarsson SV, Rivers AR. ITSxpress version 2: software to rapidly trim internal transcribed spacer sequences with quality scores for amplicon sequencing. DOI: 10.1128/spectrum.00601-24
+•	Shaffer MR, et al. Observation Bias in Metabarcoding. DOI: 10.1111/1755-0998.14119
+•	Kyle KE, Klassen JL. Untrimmed ITS2 metabarcode sequences cause artificially reduced abundances of specific fungal taxa. DOI: 10.1128/AEM.01537-24
+【本步官方文档/社区依据】
+•	DADA2 ITS workflow（官方文档）
+•	QIIME 2 dada2 denoise-single 官方文档
+•	QIIME 2 单端 FASTQ / joined-data 导入官方文档
+【步骤衔接依据】
+只有把公开单端 FASTQ 转换成统一的序列变体级证据单位，后续才有可能讨论标签主导、次级谱系和 marker 间一致性。
+本步不是方法学亮点，而是进入科学问题所需的对象统一步。
+________________________________________
+第3步：标签问题约束下、保留非植物与库外解释空间的保守分类注释与冲突裁决
+【数据来源】
+•	第2步输出的 ITS1 / ITS2 序列变体代表序列与计数表
+•	标签植物信息
+•	锁定版本的植物 ITS 参考库
+•	必要时受限使用的二级核验来源
+【方法】
+本步的目标不是追求尽可能多的物种级标签，而是围绕科学问题回答：
+样本中的 DNA 证据究竟是否支持标签对应植物谱系主导，还是存在稳定的非标签次级谱系，或存在大量无法稳定解释的未解信号。
+因此，本步执行保守分类注释，但需要明确两点：
+1.	之所以以标签植物解释为主轴，是因为研究问题聚焦于“标签主导证据是否成立”；
+2.	主植物参考库并不是对所有信号的唯一真实框架，非植物命中、库外命中和持续未解信号都必须保留为独立解释对象，而不能预先压缩为噪声。
+在此基础上，本步把冲突裁决顺序写成不可变规则：
+1.	主植物参考库中稳定命中且与标签一致
+→ 记为标签一致证据；
+2.	主植物参考库中稳定命中，但仅与标签共享更高层级
+→ 记为标签兼容证据；
+3.	主植物参考库中稳定命中，但与标签不兼容
+→ 记为非标签植物证据；
+4.	主植物参考库只能支持高层级保守折叠
+→ 记为高层级未解植物信号；
+5.	主植物参考库无法合理解释，但该信号在样本内部达到预先冻结的高重复/高优先级准入条件
+→ 进入待核验未解信号；
+6.	对于非植物命中、库外命中或二级核验仍不稳定的信号
+→ 保留为未解或非主轴信号，不得被强行压缩为噪声，也不得在证据不足时升级为正式分类结论。
+本步的意义在于：
+后续第5–8步中的“标签主导 / 次级谱系 / 未解复杂性”都必须建立在前置冻结的分类裁决基础上，而不能靠结果导向的临时解释。
+【本步输出】
+•	ITS1 保守分类注释表
+•	ITS2 保守分类注释表
+•	标签一致 / 标签兼容 / 非标签 / 高层级未解 / 待核验未解 / 非主轴未解信号分层表
+•	注释冲突裁决记录文件
+【本步学术文献】
+•	Banchi E, et al. PLANiTS: a curated sequence reference dataset for plant ITS DNA metabarcoding. DOI: 10.1093/database/baz155
+•	Quaresma A, et al. Semi-automated sequence curation for reliable reference datasets in ITS2 vascular plant DNA (meta-)barcoding. DOI: 10.1038/s41597-024-02962-5
+•	Winand R, et al. Investigating fungal diversity through metabarcoding for environmental samples: assessment of ITS1 and ITS2 Illumina sequencing using multiple defined mock communities with different classification methods and reference databases. DOI: 10.1186/s12864-025-11917-y
+•	San Martin G, et al. How reliable is metabarcoding for pollen identification? An evaluation of different taxonomic assignment strategies by cross-validation. DOI: 10.7717/peerj.16567
+•	Pappalardo P, et al. Taxon-specific BLAST percent identity thresholds for identification of unknown sequences using metabarcoding. DOI: 10.1111/2041-210X.70147
+【本步官方文档/社区依据】
+•	PLANiTS GitHub repository
+•	原研究中 BLAST + ASAP 的结果呈现逻辑
+•	相关数据库版本说明页
+【步骤衔接依据】
+本步为后续样本内稳定性证据构建提供分类学骨架。只有先把所有信号按固定裁决顺序组织成标签一致、非标签、未解或非主轴对象，第5步才有可能识别“哪些信号在同一 marker 内真正重复出现并可进入样本级升级”。
+________________________________________
+第4步：前置冻结规则对象——参数与证据裁决登记
+【数据来源】
+•	第2步输出的质量控制与序列变体构建日志
+•	第3步使用的分类裁决框架
+•	第1步登记的 controls 与分析单位信息
+【方法】
+在进入文件层一致性、negative controls 约束与样本级升级之前，必须生成并冻结一个独立、可审计的对象：
+参数与证据裁决前置登记对象（pre-registered parameter and adjudication register）
+该登记对象至少包含以下内容：
+1.	单端质量控制参数的确定规则；
+2.	序列变体构建所需参数；
+3.	文件层一致性判定规则；
+4.	高优先级未解信号的准入规则；
+5.	待核验未解信号与仅保留观察信号的区分规则；
+6.	marker 专属 controls 约束下的升级/降级规则；
+7.	单 marker 支持、双 marker 相容支持与高等级样本级证据之间的升级规则；
+8.	双 marker 共识折叠后的并行支持度展示规则；
+9.	冻结时间点与冻结后不可回调声明。
+本步的意义在于：
+把“预先冻结”“不可回调”从叙述性承诺，升级为外部可核查的独立对象。
+这样，第5–8步所有升级、降级和保留观察都不再依赖临时解释，而依赖已经冻结的规则对象。
+【本步输出】
+•	参数与证据裁决前置登记对象（冻结版）
+•	冻结时间点说明文件
+•	不可回调声明文本
+【本步学术文献】
+•	Polanco FA, et al. A Confidence Scoring Procedure for eDNA Metabarcoding Records and Its Application to a Global Marine Fish Dataset. DOI: 10.1002/edn3.70077
+•	Shaffer MR, et al. Observation Bias in Metabarcoding. DOI: 10.1111/1755-0998.14119
+•	Jones JI, et al. Sources of uncertainty in DNA metabarcoding of whole communities: Implications for its use in biomonitoring. DOI: 10.1111/2041-210X.70093
+【本步官方文档/社区依据】
+•	QIIME 2 dada2 denoise-single 官方文档
+•	QIIME 2 decontam / controls 相关工作流说明
+•	QIIME 2 Forum 关于 negative controls 与单端数据裁决的讨论
+【步骤衔接依据】
+第5–7步中的“文件层一致性”“control-aware 降级”“样本级升级”如果只停留在叙述性原则，会留下过大的研究者自由度。因此必须先把这些规则冻结为可审计对象，再进入样本级证据构建。
+________________________________________
+第5步：同一样本内部、同一 marker 下的文件层一致性证据构建
+【数据来源】
+•	第3步输出的 ITS1 / ITS2 分类注释表
+•	第2步输出的 ITS1 / ITS2 序列变体计数表
+•	第1步定义的 analysis_unit 注册文件
+•	第4步冻结的证据裁决登记对象
+【方法】
+本步仍然只在单一样本内部、单一 marker 内部工作。
+A/B/C 在这里的唯一作用，是提供文件层一致性辅助证据，而不是技术重复方差分析基础。
+对每个样本代码、每个 marker，分别考察其 A/B/C 文件观测，判断以下对象是否达到第4步冻结的检测共识规则：
+1.	标签一致证据是否在多个文件中重复出现；
+2.	非标签植物谱系是否在多个文件中重复出现；
+3.	未解信号是否在多个文件中重复出现；
+4.	哪些信号仅为单次、掉落或脆弱检出。
+因此，本步不使用模糊的“反复出现”措辞，而是严格按照已冻结的文件层一致性规则进行判断。
+只有达到一致性共识的信号，才可进入下一步 controls 约束与样本级升级；仅单次出现或高度掉落的信号，原则上只保留为边缘观察，不直接升级。
+【本步输出】
+•	ITS1 文件层一致性证据表
+•	ITS2 文件层一致性证据表
+•	标签相关一致性证据表
+•	非标签次级谱系一致性证据表
+•	未解信号一致性证据表
+•	单次/掉落/脆弱信号登记表
+【本步学术文献】
+•	Jones JI, et al. Sources of uncertainty in DNA metabarcoding of whole communities: Implications for its use in biomonitoring. DOI: 10.1111/2041-210X.70093
+•	Veríssimo J, et al. Navigating Methodological Trade-Offs in eDNA Metabarcoding Biodiversity Monitoring: Insights From a Mediterranean Watershed. DOI: 10.1111/1755-0998.14082
+•	Polanco FA, et al. A Confidence Scoring Procedure for eDNA Metabarcoding Records and Its Application to a Global Marine Fish Dataset. DOI: 10.1002/edn3.70077
+【本步官方文档/社区依据】
+•	社区关于重复观测、低丰度检出和 controls 处理的论坛讨论
+•	QIIME 2 Forum 中关于重复样本/单端数据处理的讨论
+【步骤衔接依据】
+第3步给出了分类对象，第4步冻结了文件层一致性规则，第5步则在样本内部实际判定哪些分类对象具备最基本的重复支持。
+只有达到文件层一致性的信号，才可能在第6步中进一步接受 controls 约束，并在第7步中进入样本级证据升级。
+________________________________________
+第6步：marker 专属 negative controls 约束与未解/边缘信号分级
+【数据来源】
+•	第5步输出的 marker 内文件层一致性证据
+•	第1步登记的 negative controls
+•	第2步输出的质量控制与计数日志
+•	第3步输出的未解信号分层表
+•	第4步冻结的证据裁决登记对象
+【方法】
+本步把 negative controls 明确纳入分析主干。
+核心原则只有两条：
+1.	negative controls 只在各自 marker 内使用，不跨 marker 借用；
+2.	control 约束较弱的 marker，其次级谱系与未解信号解释必须更保守。
+因此：
+•	ITS2 negative controls 只用于 ITS2 的信号约束；
+•	不允许用 ITS2 的污染图谱去惩罚 ITS1；
+•	ITS1 由于缺乏对等公开 controls，其边缘与次级信号即使具有一定文件层一致性，也必须采用更保守的升级上限。
+本步必须严格按照第4步已经冻结的裁决链条运行：
+•	哪些一致性信号在 controls 约束后仍可保留；
+•	哪些信号降级为“保留观察”；
+•	哪些未解信号可进入“待核验未解”；
+•	哪些对象只能停留在“未解/边缘信号”，不得升级。
+尤其必须执行一条关键规则：
+任何仅由 control 约束较弱的 marker 单独支持的信号，不得升级为样本级高等级结论。
+这条规则是 control asymmetry 的实质上限，而不是附带备注。
+【本步输出】
+•	ITS2 control-aware 信号分级表
+•	ITS1 保守降级信号表
+•	可进入样本级升级的次级谱系列表
+•	待核验未解信号表
+•	仅保留观察信号表
+•	controls 约束与升级上限说明文本
+【本步学术文献】
+•	Shaffer MR, et al. Observation Bias in Metabarcoding. DOI: 10.1111/1755-0998.14119
+•	Kyle KE, Klassen JL. Untrimmed ITS2 metabarcode sequences cause artificially reduced abundances of specific fungal taxa. DOI: 10.1128/AEM.01537-24
+•	Polanco FA, et al. A Confidence Scoring Procedure for eDNA Metabarcoding Records and Its Application to a Global Marine Fish Dataset. DOI: 10.1002/edn3.70077
+【本步官方文档/社区依据】
+•	QIIME 2 Forum 中关于 negative controls 的讨论
+•	QIIME 2 官方文档中与 controls、单端导入相关的说明
+•	Zenodo part 4 中公开的 ITS2 negative controls 记录
+【步骤衔接依据】
+如果没有经过 marker 专属 controls 约束，第7步中所有“次级谱系证据”都可能混入背景污染、非目标检出或 control-sensitive 信号。
+因此，本步不是附加检查，而是样本级升级前的必要筛选层。
+________________________________________
+第7步：同一样本内部 ITS1/ITS2 双 marker 保守整合与样本级证据分层
+【数据来源】
+•	第5步输出的 ITS1 / ITS2 文件层一致性证据表
+•	第6步输出的 control-aware 分级结果
+•	第3步输出的分类注释与未解信号分层表
+•	第4步冻结的证据裁决登记对象
+【方法】
+现在才进行同一样本内部的双 marker 整合。
+本步的目标不是求“检出并集最大化”，而是回答：
+在双 marker 条件下，该样本是否具备较强的签主导证据，是否存在经约束后仍保留的次级谱系证据，还是只能停留在信息不足/marker 不对称层面。
+整合时必须执行两条固定规则：
+规则一：先做分类学共识折叠，再谈样本级升级
+若 ITS1 与 ITS2 对某一核心信号给出：
+•	同属异种；
+•	种/属不对称；
+•	深浅层级不同但共享更高分类单元；
+则优先按共享分类节点折叠，视为分辨率差异，而不是直接拆解为两个独立谱系。
+只有在共识折叠后仍存在不可兼容的稳定信号时，才允许保留为独立次级谱系证据。
+规则二：双 marker 只折叠分类，不合并丰度
+折叠后的共享分类单元，其支持度必须按 marker 并行展示：
+•	ITS1 支持度
+•	ITS2 支持度
+不得将两者相加、平均或做其他跨 marker 数学合并，以免制造不存在的定量含义。
+在此基础上，样本级证据分层如下：
+1.	单 marker 标签支持证据
+标签相关谱系在一个 marker 中达到稳定文件层一致性，并通过该 marker 的 controls/升级规则约束。
+2.	双 marker 相容标签支持证据
+ITS1 与 ITS2 对标签相关谱系给出相容支持，且可通过共识折叠落到共享分类单元。
+3.	高等级标签主导证据
+只有在双 marker 相容支持成立，且未被 control asymmetry、高层级未解信号或显著冲突削弱，同时满足第4步冻结的样本级升级规则时，才可升级到高等级标签主导证据。
+4.	次级谱系证据
+非标签谱系只有同时满足：
+•	marker 内一致性；
+•	marker 专属 controls 约束；
+•	分类裁决支持；
+•	双 marker 整合后不被简单折叠为分辨率差异；
+•	符合第4步冻结的升级规则；
+方可保留为样本级次级谱系证据。
+5.	信息不足 / marker 不对称证据
+若 controls、未解信号、marker 不对称或共识折叠信息仍不足，则样本仅保留为谨慎解释对象，不强行升级。
+本步的重点是：
+单 marker 稳定只构成单 marker 支持证据，而不自动构成样本级高等级成立；control 约束较弱的 marker 也不能借双 marker 整合被抬高。
+【本步输出】
+•	样本级标签支持证据表
+•	样本级高等级标签主导证据表
+•	样本级次级谱系证据表
+•	样本级信息不足 / marker 不对称证据表
+•	双 marker 共识折叠记录文件
+•	marker 并行支持度展示文件
+【本步学术文献】
+•	Prieto AE, et al. Finding the perfect pairs: A matchmaking of plant markers and primers for multi-marker eDNA metabarcoding. DOI: 10.1111/1755-0998.13937
+•	Winand R, et al. Investigating fungal diversity through metabarcoding for environmental samples: assessment of ITS1 and ITS2 Illumina sequencing using multiple defined mock communities with different classification methods and reference databases. DOI: 10.1186/s12864-025-11917-y
+•	Polanco FA, et al. A Confidence Scoring Procedure for eDNA Metabarcoding Records and Its Application to a Global Marine Fish Dataset. DOI: 10.1002/edn3.70077
+•	Mück B, et al. Three-tiered authentication of herbal Traditional Chinese Medicine ingredients used in women’s health provides progressive qualitative and quantitative insight. DOI: 10.3389/fphar.2024.1353434
+【本步官方文档/社区依据】
+•	Mück 2024 原文中关于 ITS1 / ITS2 cumulative insight 与 unexpected ingredients 的讨论
+•	社区关于 marker 不对称、single-end 数据和整合解释的讨论
+【步骤衔接依据】
+第5步与第6步已经分别建立了文件层一致性和 controls 约束，第7步才能在不夸大证据的前提下，安全地把 marker 内结果升级到样本层面。
+这一步是整条主线从“局部信号”进入“样本级 DNA 证据结构”的关键桥梁。
+________________________________________
+第8步：样本级最终 DNA 证据结论输出与样本集合层模式总结
+【数据来源】
+•	第7步输出的样本级证据分层结果
+•	第6步输出的保留观察 / 未升级信号表
+•	第1步输出的数据边界与研究身份声明文本
+【方法】
+对每个样本生成一份最终纯文本 DNA 证据结论，固定包含以下内容：
+1.	本样本可用的公开数据基础：ITS1 / ITS2 文件、A/B/C 文件观测、controls 情况；
+2.	本样本是否具备单 marker 标签支持证据；
+3.	本样本是否具备双 marker 相容标签支持证据；
+4.	本样本是否达到高等级标签主导证据；
+5.	本样本是否存在经约束后仍保留的次级谱系证据；
+6.	本样本是否受 marker 不对称、高层级未解信号或 controls 约束不足影响；
+7.	本样本在公开 DNA 证据层面可被支持的最强结论。
+最终样本级结论用语必须限定在 DNA 证据层，例如：
+•	标签主导证据较强
+•	存在经约束后仍保留的次级谱系证据
+•	marker 不对称限制了解释力度
+•	公开 DNA 证据层面信息不足
+然后，在样本集合层面总结：
+•	哪些样本更接近标签主导证据；
+•	哪些样本更常保留次级谱系证据；
+•	哪些样本因 controls、marker 不对称或未解信号而只能谨慎解释；
+•	样本间是否存在公开 DNA 证据层面可见的复杂性模式差异。
+本步必须固定写入以下边界声明：
+1.	这不是法规意义上的真伪鉴定；
+2.	这不是物理成分比例报告；
+3.	这不是原作者原始实验链条复刻；
+4.	这只是基于公开单端 ITS1/ITS2 中间层 FASTQ 的样本内 DNA 证据再分析。
+【本步输出】
+•	每个样本一份最终 DNA 证据报告
+•	样本集合层面的复杂性模式总结文本
+•	全流程边界与不可回答问题说明文本
+【本步学术文献】
+•	Jones JI, et al. Sources of uncertainty in DNA metabarcoding of whole communities: Implications for its use in biomonitoring. DOI: 10.1111/2041-210X.70093
+•	Polanco FA, et al. A Confidence Scoring Procedure for eDNA Metabarcoding Records and Its Application to a Global Marine Fish Dataset. DOI: 10.1002/edn3.70077
+•	Yuan H, et al. DNA Metabarcoding: Current Applications and Challenges. DOI: 10.1021/acs.jafc.5c06002
+•	Mück B, et al. Three-tiered authentication of herbal Traditional Chinese Medicine ingredients used in women’s health provides progressive qualitative and quantitative insight. DOI: 10.3389/fphar.2024.1353434
+【本步官方文档/社区依据】
+•	原研究结果呈现方式与补充材料
+•	社区关于 uncertainty reporting、unexpected detections 与 controls 边界的讨论
+【步骤衔接依据】
+整条主线到此完成：
+公开单端 FASTQ → 序列变体级证据对象 → 保守注释 → 前置冻结规则对象 → 文件层一致性 → marker 专属 controls → 双 marker 整合 → 样本级与样本集合层 DNA 证据结论。
+最终输出的是公开 DNA 证据层面可见的复杂性模式，而不是超出证据边界的认证判断。
+________________________________________
+这版方案能回答的问题
+1.	商业单味药材样本的 DNA 证据是否通常由标签对应谱系主导；
+2.	在文件层一致性与 marker 专属 controls 约束后，是否仍存在可支持的次级谱系证据；
+3.	ITS1 与 ITS2 在样本级别上是相互支持，还是经常表现为不对称；
+4.	样本之间是否存在公开 DNA 证据层面可见的复杂性模式差异。
+________________________________________
+这版方案不能回答的问题
+1.	不能重建原作者最原始 MiSeq 实验全链；
+2.	不能证明 A/B/C 为严格技术重复；
+3.	不能给出法规意义上的真伪结论；
+4.	不能给出物理成分比例；
+5.	不能把单次低丰度检出直接解释为真实样本成分；
+6.	不能把公开 DNA 证据层面的复杂性模式直接等同于已被完全证明的真实生物组成事实。
+
