@@ -1,321 +1,326 @@
-A. 总体大纲（单主线）
-主科学问题（唯一）
-
-在公开可得的单味中药商品 ITS 条形码测序数据中，样本内谱系组成究竟主要表现为**“单一主导谱系 + 零散背景噪声”，还是存在“可重复、跨 marker 支持的稳定多谱系共存结构”**？(frontiersin.org
-; pmc.ncbi.nlm.nih.gov
-)
-
-核心假设（可证伪）
-
-经 marker 内阴性对照扣减、最低支持过滤和样本内谱系聚合后，大多数单味中药商品会呈现一个主导谱系显著占优的结构；只有少数样本会保留在 A/B/C 重复中可再现、且在 ITS1/ITS2 间得到一致支持的次级谱系。若多数样本在双 marker 与重复层面持续呈现多个接近强度的谱系，则该假设被否定。(frontiersin.org
-; pmc.ncbi.nlm.nih.gov
-)
+下面按你上传稿的 **A–E 格式**，给出重写后的、单主线、可执行且不含具体参数数值的研究方案；同时把前面不能被公开数据直接支撑的支线全部删掉了。
 
-主终点 / 次终点
-
-主终点
-每个商品样本被判定为“主导单谱系型”或“稳定多谱系型”的比例。
-
-次终点
+## A. 总体大纲（唯一主问题、唯一主线、研究终点）
 
-主导谱系相对优势度；
-次级谱系在 A/B/C 文件中的重复支持率；
-次级谱系在 ITS1/ITS2 间的一致支持率；
-被判为“未定型”的样本比例。
-以上终点都服务于同一科学问题，不引入新的副问题。(pmc.ncbi.nlm.nih.gov
-; academic.oup.com
-)
-整体链路图（文字版）
+### 唯一主问题
 
-公开 FASTQ 与阴性对照核验
-→ 文件清单冻结并按 ITS1/ITS2、A/B/C、negative 分层
-→ 质控、长度过滤、去重复、去噪生成 OTU
-→ BLAST 注释并聚合为样本级候选谱系表
-→ marker-specific 阴性对照扣减与最低支持过滤
-→ 提取主导谱系与次级谱系
-→ 跨 marker 整合重复证据
-→ 将每个样本判定为“主导单谱系型”或“稳定多谱系型”
-→ 统计总体分布并回答主科学问题。(frontiersin.org
-; pmc.ncbi.nlm.nih.gov
-)
+**在该公开 ITS 宏条形码原始数据中，单味中药商品样本内的谱系组成，主要表现为“单一主导谱系 + 零散背景噪声”，还是存在“可重复、跨 marker 支持的稳定多谱系共存结构”？**
+这一定义只研究“样本内谱系结构”，不研究标签真伪、不研究品牌差异、不研究流程治理，也不把原论文的三层认证框架再做升级复盘。原论文的核心目标是建立并比较分层认证策略；本方案改问的是“样本内部是否存在稳定多谱系共存”，属于同一公开数据上的新科学问题。([Frontiers][1])
 
-B. 数据可行性核查表
-1. 数据是否公开可获得
+### 主线边界
 
-可获得。Frontiers 2024 论文的数据声明明确给出 4 个 Zenodo 记录；Zenodo 页面可直接看到原始 FASTQ 文件与 md5。(frontiersin.org
-; zenodo.org
-; zenodo.org
-)
+本方案只有一条主线：
+**raw FASTQ → 样本级谱系表 → 去除明显伪影 → 主导/次级谱系判定 → 样本结构分型 → 回答唯一主问题。**
+ITS1/ITS2、重复、阴性对照、过滤规则都只是为这条主线服务，不构成第二研究目标。2025 年关于 ITS1/ITS2 的评估也提示，二者并不存在通用最优解，因此本方案把双 marker 仅作为“交叉支持证据”，不把 marker 比较本身写成研究问题。([PubMed][2])
 
-2. 文件构成（文件类型、命名结构、是否有对照/重复、是否有关键元数据）
+### 核心假设
 
-可直接核到的文件类型为 .fastq。命名中可见 sample_token + replicate(A/B/C) + marker(ITS1/ITS2) 结构，例如 FM19091_A_ITS1.fastq、FM19210_B_ITS2.fastq。ITS2 数据页还直接显示 negative_..._ITS2.fastq 与 ...NEGATIVE...ITS2.fastq，说明阴性对照实际存在。可直接核到的关键元数据包括：marker、A/B/C 重复、negative 标识、md5。(zenodo.org
-; zenodo.org
-)
+在完成保守的噪声控制后，多数样本会表现为**一个主导谱系显著占优**；只有少数样本会保留在重复层与跨 marker 层都稳定出现的次级谱系。若多数样本在重复与双 marker 下都持续呈现多个接近强度的谱系，则该假设被否定。低丰度序列的解释需要格外谨慎，因为最新文献与综述都指出，污染与低丰度过滤策略会显著影响“少量次级谱系”是否看起来像真实生物学信号。([Nature][3])
 
-3. 数据结构（字段/记录结构/可读方式）
+### 研究终点
 
-原始数据层是标准 FASTQ 序列记录，可直接作为序列分析输入。样本级 OTU 表、候选物种表、清洁物种表、主导/次级谱系表都可由公开 FASTQ 经标准流程生成，不依赖私有格式。(zenodo.org
-)
+主终点：每个样本被判为“主导单谱系型”或“稳定多谱系型”的比例。
+次终点：主导谱系优势度、次级谱系的重复支持率、次级谱系的跨 marker 一致支持率、未定型样本比例。
+这些终点都服务同一科学问题，不引入第二主线。([PubMed][4])
 
-4. 各步骤输入是否能由现有数据直接提供
+---
 
-能够直接提供的输入包括：
+## B. 数据可行性核查（文件构成、数据结构、可运行性结论）
 
-原始 reads；
-ITS1/ITS2 marker 分层；
-A/B/C 重复层级；
-阴性对照；
-通过注释生成样本内谱系组成所需的基础序列信息。(frontiersin.org
-; zenodo.org
-)
-5. 是否存在缺失数据导致步骤无法运行
+### 1. 数据是否公开
 
-存在非致命缺失。当前公开数据页没有直接给出“FM/OO/CTI 文件 token → 人类可读药材身份”的原始级映射，也没有直接给出品牌、批次来源、加工强度和 HPTLC 对应关系。
-这意味着：
+是。原论文数据声明直接给出 4 个 Zenodo 记录；Zenodo 页面可见原始 `.fastq` 文件与 md5，说明 raw 层是公开可获取的。([Frontiers][5])
 
-不能把主线写成“标签药材是否匹配”的文件级判定；
-不能做品牌差异、加工强度差异、HPTLC 对照差异分析；
-能做样本内谱系结构本身的研究，因为该问题只依赖 FASTQ、negative、重复和 marker。(frontiersin.org
-)
-6. 若存在不可得数据，是否已删去依赖该数据的步骤
+### 2. 已核到的文件构成
 
-已删去。
-本方案不再写入以下内容：
+Zenodo raw 文件名直接体现了 `sample_token + replicate(A/B/C) + marker(ITS1/ITS2)` 结构，例如 `FM19091_A_ITS1.fastq`、`FM19091_A_ITS2.fastq` 一类文件；这足以建立样本、重复、marker 三层索引。([Zenodo][6])
 
-文件级标签对应药材的真实性判定；
-品牌/来源/批次比较；
-炮制/加工效应比较；
-HPTLC 与单个 raw FASTQ 的一对一联动分析。
-这些步骤均依赖当前未直接核到的元数据，因此不进入方案正文主线。(publicationethics.org
-)
-可运行性结论
+### 3. 阴性对照是否可用
 
-可执行。
-但仅限于本方案当前定义的主科学问题：研究单味中药商品样本内的谱系结构是单主导还是稳定多谱系共存。
-若把问题改写成标签匹配、品牌比较、加工差异或 HPTLC 联动，则会立刻降为“部分可执行”。(frontiersin.org
-)
+已直接核到 **ITS2 阴性对照**，例如 `FM19209_NB_NEGATIVE_A_ITS2.fastq`、`..._B_ITS2.fastq`、`..._C_ITS2.fastq`。因此，方案中可以把 **ITS2 negative subtraction** 写成明确可执行步骤。([Zenodo][7])
 
-C. 完整实验步骤（Step 1...N）
-Step 1 文件清单冻结与样本分层
+### 4. 当前 raw 层能直接支撑什么
 
-步骤目标（与主科学问题的关系）
-建立可追溯的输入层，确保后续所有谱系结构判断都建立在真实存在的 raw FASTQ、marker、重复和 negative 分层之上，避免把不可核元数据误写进主线。
+当前公开 raw 层已直接支撑的，是：
 
-输入数据来源（必须写清）
+* 原始 reads
+* ITS1/ITS2 分层
+* A/B/C 重复
+* ITS2 阴性对照
+* 由代表序列到样本级谱系表的重建
+  这些足以支撑“样本内谱系结构判型”这条主线。([Zenodo][6])
 
-来自原始数据：Zenodo 公开 FASTQ 文件；文件名中的 sample_token、A/B/C、ITS1/ITS2、negative 标识；md5。
-不依赖上一步输出。
+### 5. 当前不写入主线的内容
 
-方法说明（不写具体参数数值，只写参数类型/调优位点）
+当前公开 raw 层并没有在已核到的文件清单中直接给出“token → 人类可读药材身份 / 品牌 / 批次 / HPTLC 对应”的同层映射证据，因此本方案不把“标签药材是否匹配”“品牌差异”“加工差异”“HPTLC 联动”写进主线。这样可以避免把方案重新拉回原论文的认证框架。([Frontiers][1])
 
-解析文件名规则；
-建立 manifest；
-将文件按 marker、样本 token、重复、control flag 分组；
-冻结纳入/排除规则，仅保留“可识别 marker、可识别重复层、可判断是否为 negative”的文件。
+### 6. 可运行性结论
 
-输出产物（文件/表格/指标）
+**结论：可运行，但主线必须严格限定为“样本内谱系结构：主导单谱系 vs 稳定多谱系共存”。**
+同时，阴性对照扣减在最终执行上限定为 **ITS2 已核实 negative 文件**；ITS1 仅进行保守的低丰度与重复一致性过滤，不编造未核实的 ITS1 negative subtraction。([Zenodo][7])
 
-manifest.tsv
-sample_groups.tsv
-exclusion_log.tsv
+---
 
-本步骤依据论文 DOI（该步骤方法直接来源）
-10.3389/fphar.2024.1353434
+## C. 完整步骤（Step 1…N）
 
-与前一步衔接依据 DOI（证明 Step i-1 → Step i 这种衔接在文献中存在）
-不适用（首步）
+### Step 1 文件清单冻结与样本分层
 
-可执行性检查点（本步骤最可能失败点）
-文件名无法稳定解析，或存在 marker/重复/negative 标识缺失。
+**目标**
+建立唯一输入层，把所有后续判断都绑定到真实存在的 raw FASTQ、marker、重复与对照标识上，保证主问题始终是“样本内谱系结构”，而不是标签认证。([Frontiers][1])
 
-若失败的降级路径（仍保持同一主线，不引入新主线）
-排除无法解析文件，仅用可解析文件进入后续步骤，不额外补造样本身份字段。(frontiersin.org
-; zenodo.org
-; zenodo.org
-)
+**输入数据来源**
+**A. 原始数据**：Zenodo 公开 FASTQ 文件；文件名中的 `sample_token`、`A/B/C`、`ITS1/ITS2`、`NEGATIVE` 标识。([Zenodo][6])
 
-Step 2 质控、长度过滤、去重复与去噪，生成 marker 内 OTU 表
+**方法**
+文件名解析、manifest 建立、样本分组、对照分组、marker 分层；只保留 marker、重复层、control flag 可识别的文件。([Frontiers][5])
 
-步骤目标（与主科学问题的关系）
-先把原始 reads 中的明显噪声、异常长度序列与冗余序列剔除，得到可用于描述样本内真实谱系结构的 marker 内 OTU 表。
+**输出产物**
+`manifest.tsv`
+`sample_groups.tsv`
+`control_manifest.tsv`
+`exclusion_log.tsv`
 
-输入数据来源（必须写清）
+**本步骤依据论文 DOI**
+`10.3389/fphar.2024.1353434`
 
-来自原始数据：Step 1 的 manifest.tsv 所对应的 FASTQ 文件。
-来自上一步输出：sample_groups.tsv。
+**与前一步衔接依据 DOI**
+首步，不适用。
 
-方法说明（不写具体参数数值，只写参数类型/调优位点）
+**本步骤可执行性检查点**
+文件名是否可稳定解析；是否每个样本至少能识别 marker 与重复层；ITS2 阴性对照是否完整进入 `control_manifest.tsv`。([Zenodo][7])
 
-按 ITS1、ITS2 分开处理；
-进行质量筛选；
-按 marker 设定长度区间类型；
-去重复；
-使用 UNOISE 类去噪算法生成 OTU；
-冻结所有过滤类型与去噪位点，不做结果导向回调。
+---
 
-输出产物（文件/表格/指标）
+### Step 2 分 marker 质控、去噪，并生成样本表与 ITS2 对照谱系表
 
-ITS1_otu_table.tsv
-ITS2_otu_table.tsv
-qc_summary.tsv
+**目标**
+把 raw reads 转成可用于谱系结构分析的 marker 内代表序列与样本表，并同步生成 ITS2 对照谱系表，为后续伪影控制做准备。([Nature][8])
 
-本步骤依据论文 DOI（该步骤方法直接来源）
-10.1038/nmeth.3869
+**输入数据来源**
+**B. 前一步输出**：来自 Step 1 的 `manifest.tsv`、`sample_groups.tsv`、`control_manifest.tsv`。([Frontiers][1])
 
-与前一步衔接依据 DOI（证明 Step i-1 → Step i 这种衔接在文献中存在）
-10.3389/fphar.2024.1353434
+**方法**
+按 ITS1、ITS2 分开处理；质量筛选、去接头/引物型处理、去噪、嵌合体去除、代表序列生成、样本表生成；ITS2 negative 文件走同一管线并单独汇总为对照谱系表。方法只写参数类型，不给具体数值。([Nature][8])
 
-可执行性检查点（本步骤最可能失败点）
-某些文件 reads 过少，或某一 marker 的大量样本在过滤后信号不足。
+**输出产物**
+`ITS1_asv_table.tsv`
+`ITS2_asv_table.tsv`
+`rep_seqs.fasta`
+`ITS2_negative_profile.tsv`
+`qc_summary.tsv`
 
-若失败的降级路径（仍保持同一主线，不引入新主线）
-允许样本以单 marker 进入后续，但在最终判定中仅能获得“单 marker 证据”，不能判为“稳定多谱系型”。(pmc.ncbi.nlm.nih.gov
-; frontiersin.org
-)
+**本步骤依据论文 DOI**
+`10.1038/nmeth.3869`
 
-Step 3 BLAST 注释，生成样本级候选谱系表
+**与前一步衔接依据 DOI**
+`10.3389/fphar.2024.1353434`
 
-步骤目标（与主科学问题的关系）
-把去噪后 OTU 转成可解释的候选谱系标签，使“主导谱系”和“次级谱系”能够在生物学层面被定义。
+**本步骤可执行性检查点**
+某些文件可能在质控后 reads 过低；某一 marker 可能出现明显掉线；ITS2 negative 文件必须能走完整同一处理流程。([Frontiers][1])
 
-输入数据来源（必须写清）
+---
 
-来自上一步输出：ITS1_otu_table.tsv、ITS2_otu_table.tsv。
-来自原始数据外部资源：公共参考数据库的可比对序列库。
+### Step 3 参考数据库注释，生成候选谱系表
 
-方法说明（不写具体参数数值，只写参数类型/调优位点）
+**目标**
+把 Step 2 的代表序列转成样本级候选谱系标签，使“主导谱系”和“次级谱系”在生物学上可解释。([OUP Academic][9])
 
-对每个 marker 的 OTU 执行 BLAST 型相似性注释；
-记录 top hit、注释层级、相似性与覆盖相关指标；
-保留不确定注释状态，用于后续降级，而不是强行给出物种级标签。
+**输入数据来源**
+**B. 前一步输出**：来自 Step 2 的 `ITS1_asv_table.tsv`、`ITS2_asv_table.tsv`、`rep_seqs.fasta`。([OUP Academic][9])
 
-输出产物（文件/表格/指标）
+**方法**
+使用植物 ITS 参考库进行比对/分类；ITS1 与 ITS2 分开注释；保留注释置信等级；对无法稳定到物种层的条目允许降到属级，不强行细化。([OUP Academic][9])
 
-ITS1_tax_assign.tsv
-ITS2_tax_assign.tsv
-annotation_confidence.tsv
+**输出产物**
+`ITS1_candidate_lineages.tsv`
+`ITS2_candidate_lineages.tsv`
+`annotation_confidence.tsv`
 
-本步骤依据论文 DOI（该步骤方法直接来源）
-10.1186/1471-2105-10-421
+**本步骤依据论文 DOI**
+`10.1093/database/baz155`；`10.1038/s41597-024-02962-5`
 
-与前一步衔接依据 DOI（证明 Step i-1 → Step i 这种衔接在文献中存在）
-10.3389/fphar.2024.1353434
+**与前一步衔接依据 DOI**
+`10.1186/s12864-025-11917-y`
 
-可执行性检查点（本步骤最可能失败点）
-数据库命中不稳定，或大量 OTU 只能到属级/科级。
+**本步骤可执行性检查点**
+ITS1/ITS2 可能给出不同分辨率；数据库命中可能只稳定到属级；某些代表序列可能为低置信注释。([PubMed][2])
 
-若失败的降级路径（仍保持同一主线，不引入新主线）
-允许把“主导/次级谱系”判定降到属级，不强迫物种级解释。(pmc.ncbi.nlm.nih.gov
-)
+---
 
-Step 4 谱系聚合、marker-specific 阴性对照扣减与最低支持过滤，形成清洁物种表
+### Step 4 证据净化：ITS2 阴性对照扣减 + 双 marker 保守低丰度/重复过滤
 
-步骤目标（与主科学问题的关系）
-把候选谱系表转成真正可用于回答主问题的“清洁样本级谱系表”，尽可能剔除背景污染、tag-jump 与极低支持噪声。
+**目标**
+把候选谱系表转成“可用于判型的清洁样本级谱系表”，尽量去掉污染、串样和不稳定低丰度尾部，避免把伪影误判为“稳定多谱系共存”。([Nature][3])
 
-输入数据来源（必须写清）
+**输入数据来源**
+**B. 前一步输出**：来自 Step 3 的 `ITS1_candidate_lineages.tsv`、`ITS2_candidate_lineages.tsv`、`annotation_confidence.tsv`，以及来自 Step 2 的 `ITS2_negative_profile.tsv`。([Zenodo][7])
 
-来自上一步输出：ITS1_tax_assign.tsv、ITS2_tax_assign.tsv、annotation_confidence.tsv。
-来自原始数据：negative FASTQ 对应的 control 组。
+**方法**
+对 ITS2 执行 negative subtraction；对 ITS1 与 ITS2 都执行保守的低丰度过滤、低置信注释剔除、重复一致性过滤；过滤依据写成“参数类型”，不写具体阈值数值。这里明确：**阴性对照扣减仅限已核实的 ITS2 negative 文件**。([Zenodo][7])
 
-方法说明（不写具体参数数值，只写参数类型/调优位点）
+**输出产物**
+`ITS1_clean_lineages.tsv`
+`ITS2_clean_lineages.tsv`
+`negative_subtraction_log.tsv`
+`filtering_log.tsv`
 
-使用 ASAP 类谱系聚合策略，合并可归并的候选条目；
-在 ITS1、ITS2 内分别进行 negative subtraction；
-应用最低支持阈值类型；
-输出每个样本在每个 marker 下的清洁谱系丰度表。
+**本步骤依据论文 DOI**
+`10.1038/s41564-025-02035-2`；`10.1002/edn3.70106`；`10.1002/ece3.8239`
 
-输出产物（文件/表格/指标）
+**与前一步衔接依据 DOI**
+`10.1186/s12864-025-11917-y`；`10.1002/ece3.8239`
 
-ITS1_clean_taxa.tsv
-ITS2_clean_taxa.tsv
-negative_subtraction_log.tsv
+**本步骤可执行性检查点**
+若过滤后多数样本只剩极少信号，则主问题仍可回答，但结论会偏向“主导单谱系/未定型”；若 ITS2 negative 本身背景复杂，则要进一步保守解释次级谱系。([Nature][3])
 
-本步骤依据论文 DOI（该步骤方法直接来源）
-10.1111/1755-0998.13281
+---
 
-与前一步衔接依据 DOI（证明 Step i-1 → Step i 这种衔接在文献中存在）
-10.3389/fphar.2023.1305410
+### Step 5 提取主导谱系与稳定次级谱系
 
-可执行性检查点（本步骤最可能失败点）
-negative 样本本身背景偏高，导致真实弱信号与背景难区分。
+**目标**
+把清洁谱系表转成“样本结构结论”：识别主导谱系，并判断非主导谱系是否在重复层面足够稳定，能够进入“稳定次级谱系候选”。([PubMed][4])
 
-若失败的降级路径（仍保持同一主线，不引入新主线）
-提高保守性，仅保留高置信主导谱系；对次级谱系统一降为“未定”，不强行判入稳定共存。(pmc.ncbi.nlm.nih.gov
-; pmc.ncbi.nlm.nih.gov
-)
+**输入数据来源**
+**B. 前一步输出**：来自 Step 4 的 `ITS1_clean_lineages.tsv`、`ITS2_clean_lineages.tsv`。([PubMed][4])
 
-Step 5 提取样本内主导谱系与次级谱系，并进行重复层稳定性判定
+**方法**
+在 marker 内计算谱系排序结构、优势度类型、重复支持类型；抽取主导谱系；把仅在单个重复出现或只在极低支持层出现的条目排除在“稳定次级谱系”之外。([PubMed][4])
 
-步骤目标（与主科学问题的关系）
-把“样本里有什么”进一步转成“样本结构是什么”：即识别主导谱系是否明显占优，以及次级谱系是否只是一过性噪声还是在 A/B/C 中可重复出现。
+**输出产物**
+`sample_dominant_lineage.tsv`
+`sample_secondary_candidates.tsv`
+`replicate_support_summary.tsv`
 
-输入数据来源（必须写清）
+**本步骤依据论文 DOI**
+`10.1002/ece3.8239`
 
-来自上一步输出：ITS1_clean_taxa.tsv、ITS2_clean_taxa.tsv。
-来自 Step 1 输出：sample_groups.tsv 中的 A/B/C 重复分组信息。
+**与前一步衔接依据 DOI**
+`10.1002/ece3.8239`
 
-方法说明（不写具体参数数值，只写参数类型/调优位点）
+**本步骤可执行性检查点**
+如果同一样本不同重复差异很大，样本可暂列“未定型”，而不是被强行写成“稳定多谱系型”。([PubMed][4])
 
-在每个 marker 内计算样本的谱系优势度、谱系数与 rank-abundance 结构；
-抽取主导谱系；
-对非主导谱系进行重复支持统计；
-仅把在重复层面满足稳定出现条件的非主导谱系记为“次级谱系候选”。
+---
 
-输出产物（文件/表格/指标）
+### Step 6 跨 marker 综合判型并完成终点统计
 
-sample_dominant_lineage.tsv
-sample_secondary_candidates.tsv
-replicate_support_summary.tsv
+**目标**
+整合 ITS1 与 ITS2 的证据，在样本层面给出最终类型判定，并统计主终点与次终点，直接回答唯一主问题。([OUP Academic][10])
 
-本步骤依据论文 DOI（该步骤方法直接来源）
-10.3390/plants10102120
+**输入数据来源**
+**B. 前一步输出**：来自 Step 5 的 `sample_dominant_lineage.tsv`、`sample_secondary_candidates.tsv`、`replicate_support_summary.tsv`。([OUP Academic][10])
 
-与前一步衔接依据 DOI（证明 Step i-1 → Step i 这种衔接在文献中存在）
-10.3390/plants10102120
+**方法**
+以“主导谱系是否稳固”和“次级谱系是否同时获得重复支持与跨 marker 支持”为核心进行样本判型；只要次级谱系缺少其中任一类支持，就不提升为“稳定多谱系型”；统计样本类型比例与相关支持指标。这里不把 raw read count 当作绝对定量值，只用于相对排序与证据整合。([OUP Academic][10])
 
-可执行性检查点（本步骤最可能失败点）
-同一样本 A/B/C 差异过大，导致无法区分真实次级谱系与随机弱信号。
+**输出产物**
+`sample_type_call.tsv`
+`primary_endpoint_summary.tsv`
+`secondary_endpoint_summary.tsv`
+`unresolved_cases.tsv`
 
-若失败的降级路径（仍保持同一主线，不引入新主线）
-把样本暂列为“未定型”，只保留主导谱系结论，不给出稳定多谱系判定。(pmc.ncbi.nlm.nih.gov
-)
+**本步骤依据论文 DOI**
+`10.1093/gigascience/gix080`；`10.1002/edn3.70250`
 
-Step 6 跨 marker 整合证据，判定样本类型并完成终点统计
+**与前一步衔接依据 DOI**
+`10.1093/gigascience/gix080`
 
-步骤目标（与主科学问题的关系）
-把 ITS1 与 ITS2 的结果合并到样本层，最终回答：各商品究竟更接近主导单谱系，还是存在稳定多谱系共存。
+**本步骤可执行性检查点**
+ITS1 与 ITS2 可能对次级谱系给出不一致支持；一旦不一致，样本保留为“主导单谱系型”或“未定型”，不强行写成稳定共存。([PubMed][2])
 
-输入数据来源（必须写清）
+---
 
-来自上一步输出：sample_dominant_lineage.tsv、sample_secondary_candidates.tsv、replicate_support_summary.tsv。
-来自上一步输出：ITS1_clean_taxa.tsv、ITS2_clean_taxa.tsv。
+## D. 审稿人风险点（仅与科学问题相关）
 
-方法说明（不写具体参数数值，只写参数类型/调优位点）
+### 1. 次级谱系可能是污染或低丰度伪影，而不是真实共存
 
-整合 ITS1 与 ITS2 对主导谱系的支持；
-仅当次级谱系同时满足“重复层稳定”与“跨 marker 支持”时，才将样本归为“稳定多谱系型”；
-若仅满足其一，则记为“单 marker/单层次 tentative”；
-对全部样本进行主终点与次终点统计。
+这是本方案最核心的审稿风险。低生物量体系对污染与交叉污染尤其敏感，低丰度过滤方式也会直接影响“次级谱系”是否出现。
+**应对**：把“稳定多谱系型”的门槛限定为“重复支持 + 跨 marker 支持”，并把 negative subtraction 明确限定在已核实的 ITS2 阴性对照上。([Nature][3])
 
-输出产物（文件/表格/指标）
+### 2. ITS1/ITS2 分辨率不一致，可能制造假性冲突
 
-sample_type_call.tsv
-primary_endpoint_summary.tsv
-secondary_endpoint_summary.tsv
-classification_log.tsv
+最新评估表明，ITS1 与 ITS2 并没有统一最优解；两者的表现会随类群、数据库和分类方法变化。
+**应对**：不把“ITS1/ITS2 谁更好”写成主问题；仅把双 marker 作为交叉支持工具，且允许注释层级降到属级。([PubMed][2])
 
-本步骤依据论文 DOI（该步骤方法直接来源）
-10.1093/gigascience/gix080
+### 3. 不能把 read counts 直接解释成真实丰度
 
-与前一步衔接依据 DOI（证明 Step i-1 → Step i 这种衔接在文献中存在）
-10.1093/gigascience/gix080
+最新工作再次提醒，raw read counts 仍不足以支撑强定量推断，尤其不能把弱次级信号的数值大小直接当成真实生物量比例。
+**应对**：本方案只用 read structure 做排序、判型与支持度，不做绝对丰度推断。([ResearchGate][11])
 
-可执行性检查点（本步骤最可能失败点）
-ITS1 与 ITS2 对同一样本的次级谱系支持不一致。
+### 4. 本方案不能外推到标签认证、品牌差异或 HPTLC 联动
 
-若失败的降级路径（仍保持同一主线，不引入新主线）
-保留“主导单谱系型 / 未定型”二分类，不把样本提升为“稳定多谱系型”。(academic.oup.com
-; pmc.ncbi.nlm.nih.gov
-)
+因为当前 raw 层直接公开的是 FASTQ、marker、重复、对照标识，而不是完备的 token→药材身份/HPTLC 对应表。
+**应对**：在论文写作中明确把研究结论限定为“样本内谱系结构”，不跨题外推。([Zenodo][6])
+
+### 5. 加工与 DNA 降解可能让样本更像“单主导”
+
+原论文本身就聚焦 processed herbal ingredients，而降解 DNA 与过滤阈值被明确列为挑战；因此“单主导”既可能反映真实结构，也可能反映加工后可恢复信息减少。
+**应对**：把“未定型”保留下来，不把所有低复杂度样本都解释为生物学单谱系。([Frontiers][5])
+
+---
+
+## E. 证据附录
+
+### 1. 论文 DOI 映射表
+
+| 用途                                | 对应步骤/部分             | DOI                        |
+| --------------------------------- | ------------------- | -------------------------- |
+| 原论文与公开数据背景                        | A、B、Step 1–2        | 10.3389/fphar.2024.1353434 |
+| 去噪/代表序列推断                         | Step 2              | 10.1038/nmeth.3869         |
+| 植物 ITS 参考数据库                      | Step 3              | 10.1093/database/baz155    |
+| ITS2 参考库扩展                        | Step 3              | 10.1038/s41597-024-02962-5 |
+| ITS1/ITS2 表现差异与注释策略               | Step 3、Step 4、风险点 2 | 10.1186/s12864-025-11917-y |
+| 低生物量污染控制                          | Step 4、风险点 1        | 10.1038/s41564-025-02035-2 |
+| 低丰度过滤综述                           | Step 4、风险点 1        | 10.1002/edn3.70106         |
+| 重复间 dominant vs low-abundance 稳定性 | Step 4–5、风险点 1      | 10.1002/ece3.8239          |
+| 多 marker 综合证据                     | Step 6              | 10.1093/gigascience/gix080 |
+| read count 不宜直接做强定量               | Step 6、风险点 3        | 10.1002/edn3.70250         |
+| 草药认证综述，说明本方案刻意避开认证主线              | A、B                 | 10.1002/pca.3466           |
+
+上述 DOI 的用途与方向，分别对应原论文、2025–2026 年最新方法/评论文献、以及执行本单主线方案所需的关键证据。([Frontiers][1])
+
+### 2. 博客 / 论坛 URL（用于识别 AI 生成方案常见硬伤）
+
+这些来源反复提到的共性问题是：**幻觉引用、无证据断言、逻辑跳步、把方法比较硬写成科学问题、以及一处明显错误就会连带削弱整篇可信度**。这正是本方案坚持单主线、逐步给 DOI、并删掉未被 raw 数据直接支撑支线的原因。([ICLR Blog][12])
+
+`https://blog.iclr.cc/2025/11/19/iclr-2026-response-to-llm-generated-papers-and-reviews/`
+`https://blog.neurips.cc/category/2025-conference/`
+`https://news.ycombinator.com/item?id=46723555`
+`https://news.ycombinator.com/item?id=46181466`
+
+### 3. 数据来源 URL
+
+`https://www.frontiersin.org/journals/pharmacology/articles/10.3389/fphar.2024.1353434/full`
+`https://zenodo.org/records/10204234`
+`https://zenodo.org/records/10204283`
+`https://zenodo.org/records/10204310`
+`https://zenodo.org/records/10204327`
+
+这些链接对应原论文全文与 4 个公开 Zenodo 数据分卷；raw FASTQ、文件命名结构与 ITS2 negative 文件都来自这些公开页面。([Frontiers][1])
+
+---
+
+## 最终自检
+
+* 是否只有一条主线：**是**。
+* 是否每一步都有“步骤 DOI”：**是**。
+* 是否每对相邻步骤都有“衔接 DOI”：**是**。
+* 是否每一步都写明输入来源：**是**。
+* 是否完全去除了审计/可重复性/透明度治理章节：**是**。
+* 是否避免了原论文升级复盘叙事：**是**。
+* 是否未给具体参数数值：**是**。([ICLR Blog][12])
+
+你要是继续，我下一步就把这版直接压成你可粘贴进文档的“正式稿口吻版”。
+
+[1]: https://www.frontiersin.org/journals/pharmacology/articles/10.3389/fphar.2024.1353434/full?utm_source=chatgpt.com "Three-tiered authentication of herbal traditional Chinese ..."
+[2]: https://pubmed.ncbi.nlm.nih.gov/40770684/?utm_source=chatgpt.com "assessment of ITS1 and ITS2 Illumina sequencing using ..."
+[3]: https://www.nature.com/articles/s41564-025-02035-2?utm_source=chatgpt.com "Guidelines for preventing and reporting contamination in ..."
+[4]: https://pubmed.ncbi.nlm.nih.gov/34824788/?utm_source=chatgpt.com "Revisiting the effect of PCR replication and sequencing ..."
+[5]: https://www.frontiersin.org/journals/pharmacology/articles/10.3389/fphar.2024.1353434/full "https://www.frontiersin.org/journals/pharmacology/articles/10.3389/fphar.2024.1353434/full"
+[6]: https://zenodo.org/doi/10.5281/zenodo.10204233 "https://zenodo.org/doi/10.5281/zenodo.10204233"
+[7]: https://zenodo.org/doi/10.5281/zenodo.10204326 "https://zenodo.org/doi/10.5281/zenodo.10204326"
+[8]: https://www.nature.com/articles/nmeth.3869?utm_source=chatgpt.com "DADA2: High-resolution sample inference from Illumina ..."
+[9]: https://academic.oup.com/database/article/doi/10.1093/database/baz155/5722079?utm_source=chatgpt.com "PLANiTS: a curated sequence reference dataset for plant ITS ..."
+[10]: https://academic.oup.com/gigascience/article/6/10/gix080/4085313?utm_source=chatgpt.com "Development and validation of a multi-locus DNA ..."
+[11]: https://www.researchgate.net/publication/400563768_Improving_Species_Abundance_Information_From_River_eDNA_Metabarcoding_Data?utm_source=chatgpt.com "Improving Species Abundance Information From River ..."
+[12]: https://blog.iclr.cc/2025/11/19/iclr-2026-response-to-llm-generated-papers-and-reviews/?utm_source=chatgpt.com "ICLR 2026 Response to LLM-Generated Papers and Reviews"
