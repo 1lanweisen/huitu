@@ -52,23 +52,16 @@ A/B/C标签定义为replicate proxy（复孔代理），仅用于稳健性标注
 ________________________________________
 6 双轨分析实施
 6.1 Track 1：严格同构复核（primary replication track）
-Track 1 仅执行与原研究主链一一对应的步骤，不引入替代算法，不采用“功能等价实现”。流程固定为：
-1) paired-end reads 合并（PEAR）；
-2) demultiplex（ngsfilter）；
-3) 长度筛选（obigrep）；
-4) 去重复（USEARCH）；
-5) UNOISE 生成 OTUs；
-6) BLAST 注释；
-7) 按阴性对照扣减；
-8) 保留 reads ≥ 5 的 OTUs；
-9) ASAP 进行 species delineation；
-10) 合并同一 unique species。
+Track 1 采用“分层同构执行”：
+- 若数据具备 raw paired-end 且含 demultiplex 所需信息，则执行完整原链：PEAR→ngsfilter→obigrep→去重复→UNOISE→BLAST→阴性对照扣减→reads≥5→ASAP→unique species；
+- 若公开层仅提供已拆分单文件 FASTQ，则 Track 1 起点定义为“demultiplex 之后的同构子链”，执行：obigrep→去重复→UNOISE→BLAST→阴性对照扣减→reads≥5→ASAP→unique species，并将该情形标记为“Sub-chain replication（非全链同构）”。
+Primary replication 结论仅来自“全链同构样本”；Sub-chain 结果单列为次级复核。
 Track 1 的步骤顺序与参数在分析前冻结。若公开数据层级导致任一步无法原样执行，必须进入“同构偏离登记表（deviation log）”并在主文结果中单列说明。
 6.2Track 2：保守扩展评估（exploratory track）
-Track 2 仅作为探索性附加分析，在 Track 1 之后执行，不参与 primary 结论判定。其约束包括：
-1. 文件层一致性（A/B/C replicate proxy）；
-2. 跨 marker 相容性（ITS1/ITS2）。
-凡“仅 Track 2 支持、Track 1 不支持”的条目，统一标记为 exploratory，不得写为主结论，不得用于推翻 Track 1。
+Track 2 为探索性附轨，且执行“正文降权规则”：
+1) 主文结果与摘要仅报告 Track 1；
+2) Track 2 全部放入补充材料，正文最多保留 1 段趋势性描述；
+3) 凡“仅 Track 2 支持、Track 1 不支持”的条目，统一标记 exploratory，不进入主结论与标题结论。
 ________________________________________
 7 证据分级与结果判定
 为兼顾可解释性与保守性，设置三级证据标签：
