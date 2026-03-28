@@ -1,0 +1,681 @@
+以下进入第二段，仅输出《可编码细则版》。基于你上传的原始方案主线与新增 PDF 证据，不改研究问题、不改步骤顺序、不删步骤、不新增主线。WSL 根目录按你给的 Windows 路径映射为：`/mnt/d/其他-小论文/数据库/zonode/陆宏龙/2/原始数据`。
+
+# 《可编码细则版》
+
+## 全局统一约束
+
+跨步骤统一字段只使用以下命名：
+
+* 样本层主键：`sample_token`
+* 重复层主键：`(sample_token, replicate, marker)`
+* marker：`ITS1` / `ITS2`
+* 重复：`A` / `B` / `C`
+* 控样标记：`control_flag`，取值限定为 `MAIN` / `NEGATIVE` / `AUX_CONTROL`
+* 原始文件路径：`read_path`
+* 特征主键：`feature_id`
+* 序列字段：`sequence`
+* 计数字段：`read_count`
+* 注释层级：`taxon_rank`
+* 注释名称：`taxon_name`
+* 注释置信：`confidence`
+
+跨步骤接口契约：
+
+* Step 1 以前，只允许出现文件系统字段与文件名解析字段。
+* Step 2 起，所有丰度表统一长表结构，不用宽表做跨步骤接口。
+* Step 3 起，所有注释结果必须保留 `feature_id`，不能只保留物种名。
+* Step 4 起，清洗后的表同时保留 `raw_read_count` 与 `clean_read_count`。
+* Step 5–6 的样本级判型只以 `sample_token` 为主键；marker 作为证据维度，不再作为样本主键。
+
+---
+
+## Step 1 文件清单冻结与样本分层
+
+### 本步目标
+
+把本地目录中的全部 raw FASTQ 冻结为唯一输入层，并按主样本、marker、重复与控样分流。
+
+### 输入文件
+
+1. 来源：原始数据
+2. 文件格式：`fastq` 或 `fastq.gz`
+3. 文件命名规则（正则）：
+
+* 主样本：`^(?P<sample_token>[A-Za-z0-9]+)_(?P<replicate>A|B|C)_(?P<marker>ITS1|ITS2)\.fastq(?:\.gz)?$`
+* ITS2 阴性控样：`^(?P<sample_token>FM\d+_NB_NEGATIVE|negative_\d+_\d+)_(?P<replicate>A|B|C)_(?P<marker>ITS2)\.fastq(?:\.gz)?$`
+* ITS2 辅助控样：`^(?P<sample_token>OO\d+(?:_OO\d+)?)_(?P<replicate>A|B|C)_(?P<marker>ITS2)\.fastq(?:\.gz)?$`
+
+4. 最小字段集合：
+   `sample_token`, `replicate`, `marker`, `control_flag`, `read_path`
+
+### 最小可运行输入（MVI）
+
+在 `/mnt/d/其他-小论文/数据库/zonode/陆宏龙/2/原始数据` 下至少发现 1 个可读 FASTQ，且文件名能被上述规则之一解析。
+
+### 处理逻辑
+
+* 递归扫描根目录及全部子目录，收集全部 `*.fastq` 与 `*.fastq.gz`。
+* 对每个文件先做绝对路径解析，再做文件名模式匹配。
+* 先按“阴性控样/辅助控样”规则匹配；未命中时再按“主样本”规则匹配，避免把 `FM19209_NB_NEGATIVE_A_ITS2.fastq` 误判成主样本。
+* 生成统一清单表，再拆成：
+
+  * `manifest_ITS1.tsv`
+  * `manifest_ITS2.tsv`
+  * `sample_groups.tsv`
+  * `control_manifest.tsv`
+  * `aux_control_manifest.tsv`
+* 未匹配文件进入 `filename_parse_log.tsv`；路径不可读、重复主键冲突或 marker 非法进入 `exclusion_log.tsv`。
+* `manifest_ITS1.tsv` 与 `manifest_ITS2.tsv` 均按单端 FASTQ 组织，不引入不存在的 read-direction 字段。
+
+### 代码实现约束
+
+1. 建议模型/算法类型
+   文件系统递归扫描 + 正则解析 + 强校验 manifest 生成
+
+2. 函数层级清单（使用真实可用函数/命令）
+
+* Python `Path.rglob`：输入根目录；输出 FASTQ 路径列表；异常为目录不存在/无权限
+* Python `Path.resolve`：输入相对或绝对路径；输出标准绝对路径；异常为路径失效
+* Python `re.fullmatch`：输入文件名与正则；输出解析字段；异常为未匹配
+* Python `csv.DictWriter`：输入记录列表；输出 TSV；异常为字段缺失
+* Python `collections.Counter`：输入主键列表；输出重复计数；异常为无
+
+3. 参数清单
+
+* `root_dir`：`str`；默认策略=必填；可调边界=必须是 WSL 可访问目录
+* `allowed_suffixes`：`list[str]`；默认策略=`[".fastq", ".fastq.gz"]`；边界=不可为空
+* `replicate_vocab`：`list[str]`；默认策略=`["A","B","C"]`；边界=不可扩展为自由文本
+* `marker_vocab`：`list[str]`；默认策略=`["ITS1","ITS2"]`；边界=不得新增其它 marker
+* `strict_mode`：`bool`；默认策略=开启；边界=关闭时只放宽日志，不放宽主键校验
+
+4. 失败回退策略
+
+* 某文件名无法解析：只写 `exclusion_log.tsv`，不进入主样本集
+* 某子目录不存在：不中断全局扫描，但记入 `filename_parse_log.tsv`
+* 某主键重复：对应记录全部挂起，不直接覆盖
+* 若 ITS1/ITS2 其中一侧为空：另一侧照常建 manifest，不改变主流程
+
+### 输出文件规范
+
+1. 文件名模板
+
+* `manifest_ITS1.tsv`
+* `manifest_ITS2.tsv`
+* `sample_groups.tsv`
+* `control_manifest.tsv`
+* `aux_control_manifest.tsv`
+* `filename_parse_log.tsv`
+* `exclusion_log.tsv`
+
+2. 格式与字段
+
+* `manifest_ITS1.tsv` / `manifest_ITS2.tsv`：`sample-id`, `absolute-filepath`
+* `sample_groups.tsv`：`sample_token`, `replicate`, `marker`, `control_flag`, `read_path`
+* `control_manifest.tsv`：`sample_token`, `replicate`, `marker`, `control_flag`, `read_path`
+* `aux_control_manifest.tsv`：同上
+* 日志表统一包含：`file_name`, `reason`, `timestamp`
+
+3. 与下一步的接口契约
+
+* Step 2 只读取 `manifest_ITS1.tsv`、`manifest_ITS2.tsv` 和 `sample_groups.tsv`
+* `sample_token`、`replicate`、`marker` 三列必须在所有清单中完全一致
+* `control_flag="MAIN"` 的记录才允许进入主样本去噪
+
+### 文献依据
+
+1. 本步依据 DOI：`10.3389/fphar.2024.1353434`
+2. 与前一步衔接依据 DOI：起始步，同 DOI
+3. 支撑简述：原文给出该项目 4 个 Zenodo 原始数据入口，且正文明确存在 ITS1/ITS2 扩增子背景，所以 Step 1 可以合法地把本地 raw FASTQ 冻结为唯一输入层。([DOI][1])
+
+---
+
+## Step 2 分 marker 质控、去噪，并生成样本表与 ITS2 控样谱系表
+
+### 本步目标
+
+把 Step 1 冻结的单端 demultiplexed FASTQ，按 marker 独立完成去引物、质量修剪、去噪、去嵌合，并输出样本级 ASV 表、代表序列与 ITS2 控样谱系表。
+
+### 输入文件
+
+1. 来源：前一步输出
+2. 文件格式：`tsv`, `fastq`, `fastq.gz`
+3. 文件命名规则：
+
+* `manifest_ITS1.tsv`
+* `manifest_ITS2.tsv`
+* `sample_groups.tsv`
+* `control_manifest.tsv`
+* `aux_control_manifest.tsv`
+
+4. 最小字段集合
+
+* manifest：`sample-id`, `absolute-filepath`
+* sample groups：`sample_token`, `replicate`, `marker`, `control_flag`, `read_path`
+
+### 最小可运行输入（MVI）
+
+`manifest_ITS1.tsv` 或 `manifest_ITS2.tsv` 至少一份非空，且其中 `absolute-filepath` 全部存在。
+
+### 处理逻辑
+
+* ITS1 与 ITS2 分开跑完整流程，不混表。
+* 对每个 marker：
+
+  1. 从 manifest 读取单端 FASTQ；
+  2. 先做引物去除；
+  3. 再做滑窗质量修剪；
+  4. 进入 DADA2 单端流程：过滤、误差学习、去噪、序列表构建、去嵌合；
+  5. 导出 ASV 长表与代表序列 FASTA。
+* ITS2 的 `NEGATIVE` 与 `AUX_CONTROL` 走同一条去噪链路，但单独导出控样谱系表，不混入主样本长表。
+* 输出 `qc_summary.tsv`，显式保留每一步保留率，供 Step 4 使用。
+* 本步不做生物学判型，只做序列层清洗与结构化输出。
+
+### 代码实现约束
+
+1. 建议模型/算法类型
+   引物剪切 + 滑窗质量修剪 + 单端 ASV 去噪
+
+2. 函数层级清单（真实工具/函数）
+
+* `cutadapt`：输入 FASTQ 与引物序列；输出去引物 FASTQ；异常为引物未命中/空输出
+* `trimmomatic SE`：输入单端 FASTQ；输出修剪后 FASTQ；异常为 JVM/路径/输出空文件
+* DADA2 `filterAndTrim`：输入修剪后 FASTQ；输出过滤后 FASTQ；异常为全部 reads 被过滤
+* DADA2 `learnErrors`：输入过滤后 FASTQ；输出误差模型；异常为样本量不足
+* DADA2 `derepFastq`：输入过滤后 FASTQ；输出去重复对象；异常为文件损坏
+* DADA2 `dada`：输入 derep 与误差模型；输出 ASV 推断；异常为模型不收敛
+* DADA2 `makeSequenceTable`：输入各样本 ASV；输出样本×ASV 表；异常为样本名不一致
+* DADA2 `removeBimeraDenovo`：输入序列表；输出去嵌合表；异常为几乎全表清空
+* R `write.table` / `Biostrings::writeXStringSet`：输出 TSV 与 FASTA
+
+3. 参数清单
+
+* `cutadapt -g/-a`：`str`；默认策略=必填；边界=仅允许本实验 ITS1/ITS2 引物
+* `trimmomatic SLIDINGWINDOW:<window>:<quality>`：默认策略=开启；边界=只允许滑窗修剪，不允许固定截断替代
+* DADA2 `maxEE`：`float`；默认策略=按 marker 分开设置；边界=必须 >0
+* DADA2 `truncQ`：`int`；默认策略=保守启用；边界=不得作为唯一质量控制
+* DADA2 `rm.phix`：`bool`；默认策略=开启；边界=布尔
+* DADA2 `multithread`：`bool/int`；默认策略=按 WSL CPU 自动；边界=不得超过可用核心数
+* DADA2 `minLen`：`int`；默认策略=按 marker 独立设置；边界=不得高到系统性排斥短 ITS
+* `pooling_mode`：`str`；默认策略=`independent`；边界=如改为 pooled 必须全 marker 一致
+
+4. 失败回退策略
+
+* 去引物后空文件：该样本进 `qc_summary.tsv` 并标记失败，不改主流程
+* 某 marker 全局保留率异常低：只保留 QC 与日志，不把该 marker 的弱证据硬推进下游
+* ITS2 控样复杂但非空：照常导出 `ITS2_negative_profile.tsv`，不在本步扣减
+* 某样本去噪后无 ASV：该样本保留空结果行，供 Step 4 判为 unresolved 候选
+
+### 输出文件规范
+
+1. 文件名模板
+
+* `ITS1_asv_long.tsv`
+* `ITS2_asv_long.tsv`
+* `ITS1_rep_seqs.fasta`
+* `ITS2_rep_seqs.fasta`
+* `ITS2_negative_profile.tsv`
+* `ITS_aux_control_profile.tsv`
+* `dada2_stats_ITS1.tsv`
+* `dada2_stats_ITS2.tsv`
+* `qc_summary.tsv`
+
+2. 格式与字段
+
+* `*_asv_long.tsv`：`sample_token`, `replicate`, `marker`, `feature_id`, `read_count`, `control_flag`
+* `*_rep_seqs.fasta`：header=`feature_id`; body=`sequence`
+* `ITS2_negative_profile.tsv` / `ITS_aux_control_profile.tsv`：`sample_token`, `replicate`, `marker`, `feature_id`, `read_count`
+* `dada2_stats_*.tsv`：`sample_token`, `replicate`, `input_reads`, `filtered_reads`, `denoised_reads`, `nonchimera_reads`
+* `qc_summary.tsv`：`sample_token`, `replicate`, `marker`, `control_flag`, `status`, `failure_stage`
+
+3. 与下一步的接口契约
+
+* Step 3 必须同时读取 `*_rep_seqs.fasta` 与 `*_asv_long.tsv`
+* `feature_id` 在同一 marker 内唯一
+* `*_asv_long.tsv` 中不得丢失 `sample_token`, `replicate`, `marker`
+* 控样谱系表与主样本表字段结构一致，只是 `control_flag` 不同
+
+### 文献依据
+
+1. 本步依据 DOI：`10.1128/AEM.01537-24`
+2. 与前一步衔接依据 DOI：`10.3389/fphar.2024.1353434`
+3. 支撑简述：你新上传的 PDF 明确主张 ITS2 预处理中应先做滑窗质量修剪，再进入 DADA2 ITS 流程；而原项目论文明确本数据来自 ITS1/ITS2 扩增子原始 FASTQ，因此 Step 1 的 manifest 可直接衔接到 Step 2 的按 marker 单独去噪。
+
+---
+
+## Step 3 参考库注释，生成候选谱系表
+
+### 本步目标
+
+把 Step 2 的代表序列映射到经整理的植物 ITS 参考库，生成样本级候选谱系表，并保留注释层级与置信信息。
+
+### 输入文件
+
+1. 来源：前一步输出 + 本地参考库
+2. 文件格式：`fasta`, `tsv`
+3. 文件命名规则
+
+* `ITS1_rep_seqs.fasta`
+* `ITS2_rep_seqs.fasta`
+* `ITS1_asv_long.tsv`
+* `ITS2_asv_long.tsv`
+* 参考序列：`*.fasta`
+* 参考分类：`*.tsv`
+
+4. 最小字段集合
+
+* 代表序列：`feature_id`, `sequence`
+* ASV 长表：`sample_token`, `replicate`, `marker`, `feature_id`, `read_count`
+* 参考分类表：`ref_id`, `taxon_rank`, `taxon_name`
+
+### 最小可运行输入（MVI）
+
+至少一份 `*_rep_seqs.fasta` 非空，且对应 marker 存在可用的植物 ITS 参考 FASTA 与 taxonomy TSV。
+
+### 处理逻辑
+
+* ITS1 与 ITS2 分别建自己的参考库索引，不共用索引。
+* 对每个 marker：
+
+  1. 用参考 FASTA 建库；
+  2. 用代表序列做序列比对；
+  3. 把比对结果回连到参考 taxonomy；
+  4. 生成每个 `feature_id` 的候选注释；
+  5. 再把候选注释回连到 ASV 长表，得到 replicate 级候选谱系长表。
+* 注释不强行写死到物种级；若最佳命中只能稳定到属级，则 `taxon_rank` 降阶。
+* 未命中或多命中无法判定者保留到 `unassigned_features.tsv`，不在本步硬删。
+
+### 代码实现约束
+
+1. 建议模型/算法类型
+   marker 专属参考库 + 序列相似性注释
+
+2. 函数层级清单（真实工具/函数）
+
+* `makeblastdb`：输入参考 FASTA；输出 BLAST 数据库；异常为序列名重复
+* `blastn`：输入代表序列 FASTA 与数据库；输出命中表；异常为数据库损坏
+* Python `pandas.read_csv`：读取 taxonomy TSV；异常为列缺失
+* Python `DataFrame.merge`：连接命中表与 taxonomy；异常为主键不唯一
+* Python `DataFrame.sort_values`：按命中质量排序；异常为字段缺失
+* Python `DataFrame.drop_duplicates`：保留每个 `feature_id` 的首选注释；异常为无
+
+3. 参数清单
+
+* `blastn -outfmt`：`str`；默认策略=表格输出；边界=必须含 query id / subject id / identity / alignment length / evalue / bitscore
+* `blastn -max_target_seqs`：`int`；默认策略=保留多候选；边界=必须 >1
+* `blastn -perc_identity`：`float`；默认策略=不写死为单一全局物种阈值；边界=0–100
+* `rank_resolution_policy`：`str`；默认策略=`species_then_genus`；边界=不得跳过 genus
+* `allow_unassigned`：`bool`；默认策略=开启；边界=不得强制全量指派
+
+4. 失败回退策略
+
+* 某 marker 参考库缺失：另一 marker 照常注释
+* 命中多而分歧大：降阶到更高 taxon_rank，不强报 species
+* `feature_id` 无命中：写入 `unassigned_features.tsv`
+* 参考 taxonomy 缺列：中断该 marker 注释，但保留 Step 2 输出
+
+### 输出文件规范
+
+1. 文件名模板
+
+* `ITS1_candidate_lineages.tsv`
+* `ITS2_candidate_lineages.tsv`
+* `annotation_confidence.tsv`
+* `annotation_rank_summary.tsv`
+* `unassigned_features.tsv`
+
+2. 格式与字段
+
+* `*_candidate_lineages.tsv`：`sample_token`, `replicate`, `marker`, `feature_id`, `read_count`, `taxon_rank`, `taxon_name`, `confidence`
+* `annotation_confidence.tsv`：`feature_id`, `marker`, `best_ref_id`, `identity`, `alignment_length`, `evalue`, `bitscore`, `confidence`
+* `annotation_rank_summary.tsv`：`marker`, `taxon_rank`, `feature_n`, `read_n`
+* `unassigned_features.tsv`：`feature_id`, `marker`, `sequence`, `reason`
+
+3. 与下一步的接口契约
+
+* Step 4 只对 `*_candidate_lineages.tsv` 做清洗；不得重新回到 FASTA 层做手工改名
+* `confidence` 必须保留为数值或可排序字段
+* `taxon_rank` 与 `taxon_name` 必须成对出现
+
+### 文献依据
+
+1. 本步依据 DOI：`10.1038/s41597-024-02962-5`
+2. 与前一步衔接依据 DOI：`10.1128/AEM.01537-24`
+3. 支撑简述：ITS2 植物注释必须依赖整理过的参考数据集；而你新上传的论文在其 DADA2 ITS 工作流中也明确把“ASV 输出 → 注释”作为标准顺序，因此 Step 2 的代表序列可以直接进入 Step 3 的参考库注释。另，植物条码参考库覆盖与质量会直接影响注释层级，不能把 species-level 当默认结果。([PubMed][2])
+
+---
+
+## Step 4 证据净化：控样校正 + 低丰度/低一致性过滤
+
+### 本步目标
+
+把 Step 3 的候选谱系表净化成可用于样本结构判型的清洁谱系表，同时显式保留污染、低丰度与低一致性过滤日志。
+
+### 输入文件
+
+1. 来源：前一步输出 + Step 2 控样谱系表
+2. 文件格式：`tsv`
+3. 文件命名规则
+
+* `ITS1_candidate_lineages.tsv`
+* `ITS2_candidate_lineages.tsv`
+* `annotation_confidence.tsv`
+* `annotation_rank_summary.tsv`
+* `unassigned_features.tsv`
+* `ITS2_negative_profile.tsv`
+* `ITS_aux_control_profile.tsv`
+* `qc_summary.tsv`
+
+4. 最小字段集合
+
+* 候选谱系表：`sample_token`, `replicate`, `marker`, `feature_id`, `read_count`, `taxon_rank`, `taxon_name`, `confidence`
+* 控样表：`sample_token`, `replicate`, `marker`, `feature_id`, `read_count`
+* QC：`sample_token`, `replicate`, `marker`, `failure_stage`
+
+### 最小可运行输入（MVI）
+
+至少一份 `*_candidate_lineages.tsv` 非空；若 `marker=ITS2`，优先同时存在 `ITS2_negative_profile.tsv`。
+
+### 处理逻辑
+
+* 先把 `feature_id` 级表按 `taxon_rank + taxon_name` 聚合成 lineage 级长表。
+* ITS2 侧建立 `control_ceiling`：
+
+  * 在 `NEGATIVE` 与 `AUX_CONTROL` 中按 `marker + taxon_rank + taxon_name` 取最大 `read_count`
+  * 对主样本同 lineage 计数执行：`clean_read_count = max(raw_read_count - control_ceiling, 0)`
+* ITS1 若未发现同级阴性控样，只做低丰度、低置信与重复一致性过滤，不做虚构控样扣减。
+* 低丰度过滤在 lineage 级执行，判断同时参考绝对计数与样本内相对占比。
+* 低置信过滤依据 `confidence` 与 `taxon_rank` 联动，不把低置信 species 直接删成空，而是优先降阶。
+* 重复一致性过滤以 `sample_token + marker + taxon_rank + taxon_name` 为单位，统计该 lineage 在 A/B/C 中的出现与稳定性。
+* 所有扣减和过滤都留日志，不覆盖原表。
+
+### 代码实现约束
+
+1. 建议模型/算法类型
+   控样上限扣减 + replicate 一致性过滤 + 低丰度过滤
+
+2. 函数层级清单（真实工具/函数）
+
+* Python `pandas.read_csv`
+* Python `DataFrame.groupby`
+* Python `DataFrame.agg`
+* Python `DataFrame.merge`
+* Python `numpy.maximum`
+* Python `DataFrame.clip`
+* Python `DataFrame.to_csv`
+
+3. 参数清单
+
+* `min_read_count`：`int`；默认策略=marker 内统一；边界=>=0
+* `min_relative_abundance`：`float`；默认策略=sample 内计算；边界=0–1
+* `min_replicate_support`：`int`；默认策略=不高于重复总数；边界=1–3
+* `confidence_floor`：`float`；默认策略=按 rank 联动；边界=0–1
+* `control_mode`：`str`；默认策略=`subtract_control_ceiling`；边界=ITS1 若无阴性控样则自动切换为 `skip_subtraction`
+* `allow_rank_demotion`：`bool`；默认策略=开启；边界=布尔
+
+4. 失败回退策略
+
+* ITS2 控样表缺失：只跳过控样扣减，不跳过其余过滤
+* 某样本扣减后全为 0：写入 `negative_subtraction_log.tsv` 并保留 unresolved 标记
+* 某 lineage 低置信但高读数：先降阶，仍不稳定才过滤
+* QC 已提示上游失败的样本：保留，但在 `filtering_summary.tsv` 标记弱证据
+
+### 输出文件规范
+
+1. 文件名模板
+
+* `ITS1_clean_lineages.tsv`
+* `ITS2_clean_lineages.tsv`
+* `negative_subtraction_log.tsv`
+* `low_abundance_filter_log.tsv`
+* `replicate_consistency_log.tsv`
+* `filtering_summary.tsv`
+
+2. 格式与字段
+
+* `*_clean_lineages.tsv`：`sample_token`, `replicate`, `marker`, `taxon_rank`, `taxon_name`, `raw_read_count`, `clean_read_count`, `confidence`, `retained_flag`
+* `negative_subtraction_log.tsv`：`sample_token`, `replicate`, `marker`, `taxon_rank`, `taxon_name`, `raw_read_count`, `control_ceiling`, `clean_read_count`
+* `low_abundance_filter_log.tsv`：`sample_token`, `replicate`, `marker`, `taxon_rank`, `taxon_name`, `reason`
+* `replicate_consistency_log.tsv`：`sample_token`, `marker`, `taxon_rank`, `taxon_name`, `replicate_support_n`, `retained_flag`
+* `filtering_summary.tsv`：`sample_token`, `marker`, `retained_lineage_n`, `dropped_lineage_n`, `weak_evidence_flag`
+
+3. 与下一步的接口契约
+
+* Step 5 只读取 `*_clean_lineages.tsv` 与 `replicate_consistency_log.tsv`
+* `clean_read_count` 为 Step 5 唯一用于排序的计数字段
+* `retained_flag=1` 的记录才允许进入主导/次级谱系提取
+
+### 文献依据
+
+1. 本步依据 DOI：`10.1038/s41564-025-02035-2`
+2. 与前一步衔接依据 DOI：`10.1016/j.csbj.2023.01.034`
+3. 支撑简述：低生物量与扩增子研究必须显式报告污染控制与去除流程；同时，基于控样和技术重复做非任意过滤能提高 precision，所以 Step 4 必须把控样上限、低丰度与重复支持全部转成可回放日志。([Nature][3])
+
+---
+
+## Step 5 提取主导谱系与稳定次级谱系
+
+### 本步目标
+
+从清洁谱系表中提取每个样本在每个 marker 内的主导谱系，并识别具有重复支持的稳定次级谱系。
+
+### 输入文件
+
+1. 来源：前一步输出
+2. 文件格式：`tsv`
+3. 文件命名规则
+
+* `ITS1_clean_lineages.tsv`
+* `ITS2_clean_lineages.tsv`
+* `filtering_summary.tsv`
+* `replicate_consistency_log.tsv`
+
+4. 最小字段集合
+
+* 清洁谱系表：`sample_token`, `replicate`, `marker`, `taxon_rank`, `taxon_name`, `clean_read_count`, `retained_flag`
+* 重复日志：`sample_token`, `marker`, `taxon_rank`, `taxon_name`, `replicate_support_n`, `retained_flag`
+
+### 最小可运行输入（MVI）
+
+至少一份 `*_clean_lineages.tsv` 中存在 `retained_flag=1` 的主样本记录。
+
+### 处理逻辑
+
+* 先在 replicate 层计算每个 lineage 的样本内相对占比。
+* 再按 `sample_token + marker + taxon_rank + taxon_name` 聚合：
+
+  * `sum_clean_read_count`
+  * `mean_relative_abundance`
+  * `replicate_support_n`
+* 对每个 `sample_token + marker`：
+
+  * 按 `sum_clean_read_count` 降序排序；
+  * 第 1 名定义为主导谱系；
+  * 其余仅在 `replicate_support_n` 达标时进入次级谱系候选。
+* 若清洁表中只剩 1 个谱系，则输出“主导谱系存在、稳定次级谱系为空”，不强造多谱系。
+* 若同一样本在同一 marker 内重复分裂严重，则样本保留 unresolved 风险标记，供 Step 6 使用。
+
+### 代码实现约束
+
+1. 建议模型/算法类型
+   marker 内聚合排序 + replicate 支持筛选
+
+2. 函数层级清单（真实工具/函数）
+
+* Python `DataFrame.groupby`
+* Python `DataFrame.sum`
+* Python `DataFrame.transform`
+* Python `DataFrame.sort_values`
+* Python `DataFrame.rank`
+* Python `DataFrame.query`
+* Python `DataFrame.to_csv`
+
+3. 参数清单
+
+* `dominance_sort_field`：`str`；默认策略=`sum_clean_read_count`；边界=不得改为 raw 计数
+* `secondary_min_support`：`int`；默认策略=沿用 Step 4；边界=1–3
+* `secondary_exclude_top1`：`bool`；默认策略=开启；边界=布尔
+* `unresolved_dispersion_flag`：`bool`；默认策略=开启；边界=布尔
+
+4. 失败回退策略
+
+* 某样本某 marker 只剩 1 条 retained lineage：照常输出 dominant，secondary 为空
+* 某样本某 marker 无 retained lineage：只写 unresolved，不中断其它样本
+* 排名并列：先按 `sum_clean_read_count`，再按 `replicate_support_n`，再按 `taxon_name` 字典序稳定打破并列
+
+### 输出文件规范
+
+1. 文件名模板
+
+* `sample_dominant_lineage_ITS1.tsv`
+* `sample_dominant_lineage_ITS2.tsv`
+* `sample_secondary_candidates_ITS1.tsv`
+* `sample_secondary_candidates_ITS2.tsv`
+* `replicate_support_summary.tsv`
+* `dominance_profile.tsv`
+
+2. 格式与字段
+
+* `sample_dominant_lineage_*.tsv`：`sample_token`, `marker`, `taxon_rank`, `taxon_name`, `sum_clean_read_count`, `replicate_support_n`
+* `sample_secondary_candidates_*.tsv`：同上，另加 `secondary_rank`
+* `replicate_support_summary.tsv`：`sample_token`, `marker`, `taxon_rank`, `taxon_name`, `replicate_support_n`
+* `dominance_profile.tsv`：`sample_token`, `marker`, `dominant_taxon_name`, `dominant_read_count`, `secondary_n`, `unresolved_flag`
+
+3. 与下一步的接口契约
+
+* Step 6 只读取样本级 dominant/secondary 文件，不再回退到 replicate 表重排
+* `dominant_taxon_name` 与 `secondary taxon_name` 必须沿用 Step 4 的降阶结果
+* `unresolved_flag` 必须原样传入 Step 6
+
+### 文献依据
+
+1. 本步依据 DOI：`10.1002/ece3.8239`
+2. 与前一步衔接依据 DOI：`10.1016/j.csbj.2023.01.034`
+3. 支撑简述：PCR 重复对高丰度类群更稳定、对低丰度类群波动更大，因此“主导谱系”和“稳定次级谱系”必须分开定义；同时前一步已经把 controls/replicates 引入过滤，所以 Step 5 只在 retained 结果上做结构抽取。([PMC][4])
+
+---
+
+## Step 6 跨 marker 证据整合与样本终判
+
+### 本步目标
+
+整合 ITS1 与 ITS2 的主导谱系和稳定次级谱系证据，在样本层输出最终类型：主导单谱系型 / 稳定多谱系型 / 未定型。
+
+### 输入文件
+
+1. 来源：前一步输出
+2. 文件格式：`tsv`
+3. 文件命名规则
+
+* `sample_dominant_lineage_ITS1.tsv`
+* `sample_dominant_lineage_ITS2.tsv`
+* `sample_secondary_candidates_ITS1.tsv`
+* `sample_secondary_candidates_ITS2.tsv`
+* `replicate_support_summary.tsv`
+* `dominance_profile.tsv`
+
+4. 最小字段集合
+
+* dominant：`sample_token`, `marker`, `taxon_rank`, `taxon_name`, `replicate_support_n`
+* secondary：`sample_token`, `marker`, `taxon_rank`, `taxon_name`, `replicate_support_n`
+* dominance profile：`sample_token`, `marker`, `secondary_n`, `unresolved_flag`
+
+### 最小可运行输入（MVI）
+
+同一 `sample_token` 至少在 ITS1 或 ITS2 之一存在 dominant 结果。
+
+### 处理逻辑
+
+* 以 `sample_token` 为主键整合 ITS1 与 ITS2。
+* 先比对 dominant：
+
+  * 两个 marker 都有 dominant 且同名/同 rank：记为主导一致
+  * 只有一个 marker 有 dominant：记为单侧主导
+  * 两侧 dominant 冲突：记为 dominant conflict
+* 再比对 secondary：
+
+  * 仅当某次级谱系在 marker 内已满足重复支持，且跨 marker 也能找到相同 `taxon_rank + taxon_name`，才记为稳定多谱系证据
+* 终判规则：
+
+  * `主导单谱系型`：主导一致或单侧主导清晰，且无跨 marker 稳定次级谱系
+  * `稳定多谱系型`：存在主导谱系，同时至少 1 个次级谱系满足“marker 内重复支持 + 跨 marker 支持”
+  * `未定型`：dominant conflict、弱证据、或上游 unresolved_flag 为真
+* 本步不把 read count 解释为绝对丰度，只用于同一样本内部排序和证据整合。
+
+### 代码实现约束
+
+1. 建议模型/算法类型
+   样本级规则整合 + 证据标签判定
+
+2. 函数层级清单（真实工具/函数）
+
+* Python `pandas.read_csv`
+* Python `DataFrame.merge`
+* Python `DataFrame.pivot_table`
+* Python `DataFrame.groupby`
+* Python `numpy.select`
+* Python `DataFrame.fillna`
+* Python `DataFrame.to_csv`
+
+3. 参数清单
+
+* `cross_marker_match_fields`：`list[str]`；默认策略=`["taxon_rank","taxon_name"]`；边界=不得只按名称匹配
+* `require_secondary_cross_marker_support`：`bool`；默认策略=开启；边界=布尔
+* `final_call_priority`：`list[str]`；默认策略=`["UNRESOLVED","MULTI_LINEAGE","SINGLE_DOMINANT"]`；边界=未定型优先于硬判
+* `allow_single_marker_call`：`bool`；默认策略=开启；边界=只允许输出主导单谱系型，不允许据此直接判稳定多谱系型
+
+4. 失败回退策略
+
+* 只有一个 marker 可用：只允许输出 `主导单谱系型` 或 `未定型`
+* 两 marker dominant 冲突：直接 `未定型`
+* secondary 只在一个 marker 出现：保留为注释，不进入 `稳定多谱系型`
+* 任一上游 unresolved_flag 为真：优先 `未定型`
+
+### 输出文件规范
+
+1. 文件名模板
+
+* `sample_type_call.tsv`
+* `primary_endpoint_summary.tsv`
+* `secondary_endpoint_summary.tsv`
+* `cross_marker_support_summary.tsv`
+* `unresolved_cases.tsv`
+* `final_interpretation_notes.tsv`
+
+2. 格式与字段
+
+* `sample_type_call.tsv`：`sample_token`, `final_type`, `dominant_support_status`, `secondary_support_status`, `reason_code`
+* `primary_endpoint_summary.tsv`：`final_type`, `sample_n`, `sample_fraction`
+* `secondary_endpoint_summary.tsv`：`metric_name`, `metric_value`
+* `cross_marker_support_summary.tsv`：`sample_token`, `taxon_rank`, `taxon_name`, `support_ITS1`, `support_ITS2`
+* `unresolved_cases.tsv`：`sample_token`, `reason_code`, `detail`
+* `final_interpretation_notes.tsv`：`sample_token`, `note_type`, `note_text`
+
+3. 与下一步的接口契约
+
+* 本步为主线终点，不再向下游回传原始 read 层数据
+* `final_type` 只允许三值：`主导单谱系型` / `稳定多谱系型` / `未定型`
+* `reason_code` 必须可追溯到 dominant conflict、single-marker-only、secondary-not-cross-supported、upstream-unresolved 之一
+
+### 文献依据
+
+1. 本步依据 DOI：`10.1016/j.scitotenv.2024.176200`
+2. 与前一步衔接依据 DOI：`10.1002/ece3.8239`
+3. 支撑简述：多 marker 植物 metabarcoding 能提高恢复率，但不同 marker 仍有方法偏差，所以终判必须走“交叉支持”而不是简单相加；同时 Step 5 已把 marker 内重复支持抽出来了，因此 Step 6 只在样本级整合这些已验证过的信号。另，ITS1/ITS2 的性能差异本身就是需要被整合而不是忽略的证据维度。([ScienceDirect][5])
+
+---
+
+## 终步后的唯一回答口径
+
+* 若多数样本落入 `主导单谱系型`：只回答“样本内谱系结构以单一主导谱系为主”
+* 若相当比例样本落入 `稳定多谱系型`：只回答“存在可重复、跨 marker 支持的稳定多谱系共存”
+* 若 `未定型` 比例偏高：只回答“现有 raw 层足以重建部分样本结构，但不足以稳健终判全部样本”
+
+不输出品牌比较，不引入 HPTLC 联动，不把 read count 写成绝对丰度。
+
+[1]: https://doi.org/10.3389/fphar.2024.1353434?utm_source=chatgpt.com "Frontiers | Three-tiered authentication of herbal traditional Chinese medicine ingredients used in women’s health provides progressive qualitative and quantitative insight"
+[2]: https://pubmed.ncbi.nlm.nih.gov/38272945/?utm_source=chatgpt.com "Semi-automated sequence curation for reliable reference datasets in ITS2 vascular plant DNA (meta-)barcoding - PubMed"
+[3]: https://www.nature.com/articles/s41564-025-02035-2?utm_source=chatgpt.com "Guidelines for preventing and reporting contamination in low-biomass microbiome studies | Nature Microbiology"
+[4]: https://pmc.ncbi.nlm.nih.gov/articles/PMC8601883/?utm_source=chatgpt.com "
+            Revisiting the effect of PCR replication and sequencing depth on biodiversity metrics in environmental DNA metabarcoding - PMC
+        "
+[5]: https://www.sciencedirect.com/science/article/pii/S0048969724063563?utm_source=chatgpt.com "A comparative analysis of eDNA metabarcoding and field surveys: Exploring freshwater plant communities in rivers - ScienceDirect"
