@@ -1,0 +1,374 @@
+**审阅完成声明**
+
+已完成对两个指定链接的审阅与理解，以下方案仅在这两个文档冻结的字段、步骤与判定边界内展开。核心硬约束包括：Step 1–6 的输入/输出继承、`sample_id == sample_token`、`ITS1/ITS2` 分 marker 独立处理、`control_flag ∈ {MAIN, NEGATIVE, AUX_CONTROL}`、文件名解析优先级 `NEGATIVE → AUX_CONTROL → MAIN`、`replicate` 仅作 A/B/C 技术重复代理、`dominant_* / secondary_*` 仅可由 Step 5 产生、`final_type / reason_code` 仅可由 Step 6 产生；跨 marker 终判必须服从 `dom_conflict→未定型`、`cross_secondary_supported→稳定多谱系型`、`dom_match 或 single_marker_clear→主导单谱系型`，且单 marker 不得单独触发“稳定多谱系型”。([GitHub][1])
+
+**我从两个链接中理解到的关键约束**
+
+* **流程冻结**：研究主线不是“复刻原始 paired-end 实验”，而是在公开 single-file FASTQ 约束下做可复核、可审计的双轨再分析；但你当前 GitHub 细则又把主工作流进一步冻结为 Step 1–6 的单一主线，主文应围绕这条主线组织图表，而不是回到 2024 原文的“三层认证”叙事。([GitHub][1])
+* **字段冻结**：全局只承认 `sample_id, sample_token, replicate, marker, control_flag, read_path, feature_id, sequence, taxon_rank, taxon_name, reads, confidence` 及文档允许的派生字段；工具适配列不能替代冻结字典。([GitHub][2])
+* **Step 1 约束**：必须先做 manifest/样本分层与错误日志；`(sample_id, replicate, marker)` 是重复层主键；`E001–E007` 错误码与回退路径要保留。([GitHub][2])
+* **ITS1/ITS2 规则**：两 marker 直到 Step 6 前都不能混池解释；ITS2 有 NEGATIVE/AUX_CONTROL 背景控制与 `control_ceiling` 扣减，ITS1 若缺同级阴性控样，不得“虚构扣减”。([GitHub][2])
+* **replicate 规则**：A/B/C 只是 `replicate proxy`，只能用来做重复出现/一致性标注，不能包装成严格实验方差估计。([GitHub][1])
+* **dominant vs secondary lineage**：每个 `sample_id + marker` 先按 `clean_reads` 聚合排序，首位为主导谱系；非主导只有在 `retained_flag=true` 且 `replicate_support_status=supported` 时，才能进入“稳定次级候选”。([GitHub][2])
+* **跨 marker 终判**：`same_taxon()` 必须同时满足 rank 和 name 规范化一致；主导冲突直接 `未定型`；单 marker 最多给出“主导单谱系型/未定型”；“稳定多谱系型”必须来自跨 marker 的次级共同支持。([GitHub][2])
+* **缺失输入**：文档没有显式冻结“样本标签目标谱系表”这类 `sample_id → labeled_taxon` 映射，因此任何“标签一致率/标签主导率”图都需要额外输入，不能凭空从现有字段推出。([GitHub][1])
+
+**取舍理由（处理文献与方案冲突）**
+
+我不沿用 2024 原文里早期就合并 nrITS1/nrITS2 的 pooled 展示方式，而改成“marker 内先证据化、再跨 marker 终判”，因为你的细则要求 marker-specific 控样与终判逻辑，且 2025 BMC Genomics 的 mock community 评估明确显示 ITS1 与 ITS2 会漏掉不同物种，二者不能被当成可互换证据。([Frontiers][3])
+
+我也不把 reads 直接画成“配方含量/成分比例”结论图。2025 的 RSJPW 研究已明确说，检测频率与 read abundance 不能直接回推出原始配方比例；ASqMI 也强调 amplicon sequencing 更适合做定性 presence/absence 或支持度判断，而不是未经校准的定量含量推断。([Frontiers][4])
+
+另外，图形制作层面不建议任何生成式 AI 生成主文图片：Nature Portfolio 明确不允许 generative AI images 用于发表；AI/LLM 的使用需要有人类负责并适当披露。GigaScience 与 Harvard Misinformation Review 的近年讨论都把“自信但错误的 AI 输出”视为研究完整性风险，因此本方案全部按“脚本可重绘 + 向量可编辑”设计。([Nature][5])
+
+---
+
+## Figure Storyline 总览表
+
+| Figure 编号 | 一句话结论                              | 要说服的审稿问题                               | 证据来源                                    |
+| --------- | ---------------------------------- | -------------------------------------- | --------------------------------------- |
+| Fig. 1    | 输入层是冻结、可追溯、非挑样的                    | 你分析的是完整公开数据，还是挑了“好看样本”？                | 方案/细则 Step 1；QIIME manifest 风险          |
+| Fig. 2    | 质控与控样处理是 marker-specific 且保守的      | 低丰度与污染背景是否被系统性控制？                      | Step 2–4；Nature Microbiology 2025；ASqMI |
+| Fig. 3    | 样本内谱系结构可被拆成“主导”与“稳定次级”两层           | 所谓 secondary lineage 是噪声，还是可复核信号？      | Step 5；重复一致性文献；原领域 abundance 范式         |
+| Fig. 4    | 最终结论来自跨 marker 证据整合，而非单 marker 想当然 | 终判是否被 ITS1/ITS2 冲突、单 marker 漏检或命名差异误导？ | Step 6；ITS1/ITS2 互补性研究                  |
+| Fig. 5    | 主结论对阈值与冲突处理具有稳健性，并清楚暴露边界           | 结论是不是参数一改就翻车？局限是否诚实呈现？                 | 方法文档敏感性要求；复现性/透明度规范                     |
+
+上表的“证据来源”取自你提供的两份 GitHub 文档，以及 2024–2026 的同领域论文、污染控制共识、报告规范与 Nature 图形/AI 政策。([GitHub][1])
+
+---
+
+## 逐图设计（子图 A/B/C 级）
+
+### Figure 1
+
+**图标题**：公开 FASTQ 输入层冻结、样本覆盖与纳入审计
+
+**审稿命题**：后续所有谱系判断都建立在完整、可追溯、未挑选的公开输入层之上。
+
+**全图格式约束**：双栏宽 183 mm；字体 Arial/Helvetica 5–7 pt；轴必须带单位；不用彩色文字、网格线、阴影、彩虹色图；主文图导出为可编辑向量 PDF/SVG。([Nature Research Figure Guide][6])
+
+| 子图 | 输入数据（到字段级）                                                                                                                                                                                  | x / y 定义                                                                   | 分组 / 分面                   | 颜色方案（HEX + 语义）                                                                                        | 统计标注                                     | 图注要点                                                        | 误读防护                                  |
+| -- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- | ------------------------- | ----------------------------------------------------------------------------------------------------- | ---------------------------------------- | ----------------------------------------------------------- | ------------------------------------- |
+| A  | `manifest_ITS1.tsv`, `manifest_ITS2.tsv`, `sample_groups.tsv`, `control_manifest.tsv`, `aux_control_manifest.tsv`; 字段：`sample_id, sample_token, replicate, marker, control_flag, read_path` | 无坐标；流程图                                                                    | Step 1→6                  | `#0072B2`=ITS1；`#E69F00`=ITS2；`#009E73`=MAIN；`#D55E00`=NEGATIVE；`#CC79A7`=AUX_CONTROL；`#595959`=日志/排除 | 无                                        | 明示“公开 single-file FASTQ 输入层 ≠ 原始 paired-end 测序层”；每一步输出文件名写全 | 在图内脚注写明“本研究不宣称逐步完全复刻原实验，只做公开数据约束下再分析” |
+| B  | `filename_parse_log.tsv`, `exclusion_log.tsv`, 两个 manifest；字段：`read_path, marker, control_flag, error_code`                                                                                 | x=审计阶段（扫描→解析通过→主键去重→纳入）；y=文件数（count, unit=files）                           | facet=`marker`            | `#009E73`=纳入；`#D55E00`=NEGATIVE；`#CC79A7`=AUX_CONTROL；`#7F7F7F`=排除                                    | 每阶段顶部标 retention %；95% exact binomial CI | 回答“有没有静默丢文件”                                                | 图注注明这是**文件数**，不是样本数                   |
+| C  | 两个 manifest + `sample_groups.tsv`；字段：`sample_id, marker, replicate, control_flag`                                                                                                           | x=`marker`；y=`sample_id`；tile fill=`n_distinct(replicate)`（0–3, unit=reps） | MAIN 单独主面板；控样单独右侧小面板      | 连续色：`#F5F5F5`→`#B8C7E0`→`#1F3B73` 表示 0/1–2/3 个 replicate                                              | 无显著性检验；仅显示 coverage 阈值线（3 reps）          | 显示每个样本是否双 marker、是否有 A/B/C 覆盖                               | 图内标注“replicate=A/B/C 为技术重复代理，不是生物重复”  |
+| D  | `control_manifest.tsv`, `aux_control_manifest.tsv`；字段：`sample_token, marker, control_flag, read_path`                                                                                       | x=`marker`；y=唯一控样文件数（count, unit=files）                                    | grouped by `control_flag` | `#D55E00`=NEGATIVE；`#CC79A7`=AUX_CONTROL                                                              | 条形顶部标 count                              | 证明控样不是事后拼凑，而是独立进入流程                                         | 图注写明“ITS1 若无匹配阴性控样，不做虚构扣减，只在后续执行保守过滤” |
+
+**这张图为什么放主文**：2024 原研究与 2025 RSJPW 论文都把工作流和样本覆盖作为前置叙事，但你的细则比它们更强调输入冻结与日志化，因此主文第一图必须先堵住“挑样、漏样、错样、错 manifest”四个高频否决点。([Frontiers][4])
+
+---
+
+### Figure 2
+
+**图标题**：marker-specific 质控、注释净化与控样校正
+
+**审稿命题**：低丰度噪声、注释不稳与 ITS2 背景污染都被独立、保守地处理了。
+
+| 子图 | 输入数据（到字段级）                                                                                                                                                                                                                        | x / y 定义                                                  | 分组 / 分面                                   | 颜色方案                                                                                 | 统计标注                      | 图注要点                      | 误读防护                                                     |
+| -- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------- | ----------------------------------------- | ------------------------------------------------------------------------------------ | ------------------------- | ------------------------- | -------------------------------------------------------- |
+| A  | `qc_summary.tsv`；字段：`sample_id, marker, raw_reads, clean_reads`                                                                                                                                                                   | x=`marker`；y=`reads`（log10(reads+1)）                      | paired samples；facet=raw vs clean         | `#0072B2`=ITS1；`#E69F00`=ITS2                                                        | 箱线+散点；配对 Wilcoxon；中位数/IQR | 显示每 marker 的保留读数分布        | 图注写“reads 表示支持量，不等于成分含量”                                 |
+| B  | `ITS1_asv_table.tsv`, `ITS2_asv_table.tsv`；字段：`sample_id, feature_id, reads`                                                                                                                                                      | x=`marker`；y=每样本 ASV 数（count, unit=features）              | 无或 facet=`control_flag`（若可回连）             | `#0072B2` / `#E69F00`                                                                | 中位数/IQR；配对 Wilcoxon       | 证明去噪后仍保留足够复杂度，不是过度过滤      | 统一 y 轴范围；不把 ITS1/ITS2 直接解释成“优劣”                          |
+| C  | `ITS2_candidate_lineages.tsv`, `ITS2_clean_lineages.tsv`, `ITS2_negative_profile.tsv`, `ITS_aux_control_profile.tsv`；字段：`sample_id, taxon_rank, taxon_name, raw_reads, clean_reads, reads`                                        | x=`raw_reads`；y=`clean_reads`（unit=reads）                 | facet=`taxon_rank` 或 `in_control_profile` | `#009E73`=未受控样影响/保留；`#D55E00`=在控样中出现且被压低；45°线 `#595959`                              | 45°参考线；报告中位数 Δreads       | 直观证明 ITS2 背景扣减确实发生、且不覆盖源表 | 图注强调 ITS1 不出现在此 panel，因为 ITS1 不允许虚构 negative subtraction |
+| D  | `ITS1_candidate_lineages.tsv`, `ITS2_candidate_lineages.tsv`, `ITS1_clean_lineages.tsv`, `ITS2_clean_lineages.tsv`, `annotation_confidence.tsv`；字段：`sample_id, marker, taxon_rank, taxon_name, confidence, raw_reads/clean_reads` | x=阶段（candidate vs clean）；y=lineage 占比（%, unit=proportion） | facet=`marker`；stack=`taxon_rank`         | `#1B9E77`=species；`#66A61E`=genus；`#E6AB02`=higher rank；`#7F7F7F`=unassigned/removed | 比例堆叠；95% bootstrap CI 可选  | 净化后的注释层级更保守、更适于终判         | 图注明确“这里比较的是保留 lineages 结构，不是样本成功率”                       |
+
+**这张图为什么放主文**：2025 Nature Microbiology 共识强调污染控制要覆盖采样到分析到报告全链路；ASqMI 强调负控、阈值与过程报告；你的 Step 2–4 正好对应这些要点，所以第二图必须把“信号不是污染、不是低丰度漂移、不是注释幻觉”说透。([Nature][7])
+
+---
+
+### Figure 3
+
+**图标题**：样本内谱系结构的主导层与稳定次级层
+
+**审稿命题**：secondary lineage 不是“只要出现就算”，而是必须在净化后、重复支持后才进入解释层。
+
+| 子图 | 输入数据（到字段级）                                                                                                                                                                                             | x / y 定义                                            | 分组 / 分面                                | 颜色方案                                               | 统计标注                                | 图注要点                                                 | 误读防护                                            |
+| -- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------- | -------------------------------------- | -------------------------------------------------- | ----------------------------------- | ---------------------------------------------------- | ----------------------------------------------- |
+| A  | `sample_dominant_lineage_ITS1.tsv`, `sample_dominant_lineage_ITS2.tsv`, `ITS1_clean_lineages.tsv`, `ITS2_clean_lineages.tsv`；字段：`sample_id, taxon_rank, taxon_name, clean_reads` + 派生 `dominant_share` | x=`marker`；y=`sample_id`；fill=`dominant_share`（0–1） | 按后续 `final_type` 与 `dominant_share` 排序 | 连续色：`#F5F5F5`→`#9FB6D9`→`#1F3B73`; 文本黑色            | 无 p 值；tile 内写 `dominant_taxon_name` | 审稿人一眼看到“谁被单一谱系主导，谁不是”                                | 税onomic identity 用文本，不用几十种颜色，避免“颜色=物种”误导        |
+| B  | `sample_secondary_candidates_ITS1.tsv`, `sample_secondary_candidates_ITS2.tsv`；字段：`sample_id, taxon_rank, taxon_name, clean_reads, replicate_support_status`                                           | x=`marker`；y=每样本支持的次级候选数（count, unit=lineages）      | 可加 facet=`taxon_rank`                  | `#0072B2`=ITS1；`#E69F00`=ITS2                      | 箱线+抖点；中位数/IQR                       | 只统计 `replicate_support_status=supported` 的 secondary | 图注明写“不含未支持的 secondary”                          |
+| C  | dominant 表 + secondary 表 + clean_lineages；字段：`sample_id, marker, dominant_clean_reads, max_secondary_clean_reads, clean_reads`                                                                         | x=`dominant_share`；y=`max_secondary_share`（0–1）     | facet=`marker`                         | `#009E73`=仅主导明显；`#56B4E9`=主导+稳定次级；`#D55E00`=接近冲突边界 | 垂直/水平阈值线；Spearman ρ 可选              | 把“单主导”和“多谱系候选”在同一坐标里拆开                               | 轴名写成 share，不写 abundance，避免被读成定量配方比例             |
+| D  | `replicate_support_summary.tsv` 或由 clean_lineages 派生；字段：`sample_id, marker, replicate, taxon_name`                                                                                                     | x=`marker`；y=两两 replicate 的 Jaccard 相似度（0–1）        | 无                                      | `#0072B2` / `#E69F00`                              | 箱线+中位数/IQR；配对 Wilcoxon              | 证明 dominant/secondary 的进入门槛有重复支持基础                   | 图注注明 A/B/C 是 replicate proxy，因此这里只报告一致性，不估计实验方差 |
+
+**这张图为什么放主文**：2024 原文和 2025 RSJPW 都用了 abundance-oriented 结果图，但你这套研究真正的创新不是“又一张 abundance heatmap”，而是把 clean lineages 严格分成 dominant 与 stable secondary 两层，并把 replicate support 正式纳入解释门槛。([Frontiers][3])
+
+---
+
+### Figure 4
+
+**图标题**：跨 marker 证据整合与样本终判
+
+**审稿命题**：终判不是凭某一个 marker 的单次命中，而是由跨 marker 规则、冲突处理和 unresolved 边界共同决定。
+
+| 子图 | 输入数据（到字段级）                                                                                                                                                                                          | x / y 定义                                         | 分组 / 分面                       | 颜色方案                                                          | 统计标注                          | 图注要点                      | 误读防护                                                     |
+| -- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------ | ----------------------------- | ------------------------------------------------------------- | ----------------------------- | ------------------------- | -------------------------------------------------------- |
+| A  | `sample_type_call.tsv`, `dominance_profile.tsv`；字段：`sample_id, final_type, reason_code` + 派生证据状态 `dom_match, dom_conflict, cross_secondary_supported, single_marker_clear, has_upstream_unresolved` | Sankey/parallel sets；左=证据状态；右=`final_type`；y=样本数 | 无                             | `#009E73`=主导单谱系型；`#56B4E9`=稳定多谱系型；`#595959`=未定型；冲突流 `#D55E00` | 流末端标 n 和 %                    | 最核心的终判逻辑可视化               | 图内加规则提示：“single marker cannot call stable multi-lineage” |
+| B  | `sample_type_call.tsv`；字段：`sample_id, final_type, reason_code`                                                                                                                                      | x=`final_type`；y=样本数或比例（%）                       | stack=`reason_code`           | 同 A；`reason_code` 用同色深浅                                       | 95% exact binomial CI         | 展示终判分布和失败原因结构             | 图注写“未定型是保守输出，不是失败样本”                                     |
+| C  | dominant/secondary tables + `sample_type_call.tsv`；字段：`sample_id, final_type`，派生布尔项 `has_dom_ITS1, has_dom_ITS2, dom_match, cross_secondary_supported, unresolved`                                  | x=证据部件；y=`sample_id`；fill=0/1                    | 行按 `final_type` 排序            | `#FFFFFF`=否；`#1F78B4`=是；`#D55E00`=冲突；`#595959`=unresolved     | 无                             | 让终判不再像“黑箱分类器”             | 布尔热图比复杂树图更利于同行复核                                         |
+| D  | **缺失输入**：需新增 `sample_label_reference.tsv`；建议字段：`sample_id, labeled_taxon_rank, labeled_taxon_name`；再 join dominant tables                                                                           | x=标签谱系；y=dominant / final_type 一致性类别             | facet=`marker` 或 `final_type` | `#009E73`=标签一致；`#E6AB02`=同属不同种；`#D55E00`=不一致；`#595959`=无法判定   | Cohen’s kappa 或简单一致率 + 95% CI | 这是直接回应“标签对应谱系是否主导”的 panel | **现阶段不得绘制主结果图**；必须先补齐标签映射输入                              |
+
+**这张图为什么放主文**：你的细则把 Step 6 设计成真正的 primary endpoint，因此主文必须把“为什么是这个 final_type”可解释化。2025 的 ITS1/ITS2 benchmark 也支持把两 marker 视为互补但非可互换证据。([Springer][8])
+
+---
+
+### Figure 5
+
+**图标题**：敏感性分析、未定型边界与结论稳健性
+
+**审稿命题**：主结论不是阈值魔术；不稳定部分被诚实降级，而非强行讲故事。
+
+| 子图 | 输入数据（到字段级）                                                                                                                                                                      | x / y 定义                                                          | 分组 / 分面                  | 颜色方案                                                                            | 统计标注                | 图注要点                                       | 误读防护                                   |
+| -- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- | ------------------------ | ------------------------------------------------------------------------------- | ------------------- | ------------------------------------------ | -------------------------------------- |
+| A  | **派生分析表** `sensitivity_grid_summary.tsv`；来源于对 Step 4–6 的冻结参数网格重跑；字段建议：`sample_id, low_abundance_policy, secondary_cross_support_policy, control_subtraction_policy, final_type` | x=参数组合；y=`final_type` 比例（%）                                       | facet=`final_type`       | `#009E73` / `#56B4E9` / `#595959`                                               | 无 NHST；显示 base 参数位置 | 观察结论是否只在狭窄窗口成立                             | 图注强调“敏感性分析不改主参数，只检验稳健性”                |
+| B  | 同上；派生 `call_stability`                                                                                                                                                          | x=样本；y=跨参数组合一致率（0–1）                                              | 行按 `final_type(base)` 排序 | 连续色：`#F5F5F5`→`#74A9CF`→`#045A8D`                                               | 标出 <0.7 稳定性的样本      | 找出真正脆弱的样本，而不是平均掩盖                          | 标注这些样本同步进入 `unresolved_cases.tsv` 或讨论区 |
+| C  | `unresolved_cases.tsv`, `final_interpretation_notes.tsv`；字段：`sample_id, reason_code`                                                                                            | x=`reason_code`；y=样本数                                             | 无                        | `#595959` 主色；`#D55E00` 高风险冲突                                                    | count + 95% CI      | 未定型来自哪里：主导冲突、上游 unresolved、次级仅单 marker 支持等 | 不把不同 reason_code 混成一个“灰箱”              |
+| D  | dominant/secondary tables + sample_type_call；派生 `single_marker_dropout_class`                                                                                                   | x=情形（ITS1-only / ITS2-only / dom_conflict / dual-clear）；y=样本比例（%） | 无                        | `#0072B2`=ITS1-only；`#E69F00`=ITS2-only；`#D55E00`=conflict；`#009E73`=dual-clear | 比例 + 95% CI         | 强化“单 marker 只可给保守结论”的方法边界                  | 图注再次写明：ITS1/ITS2 互补，不可互相替代为终判真值        |
+
+**这张图为什么放主文**：你的方法文档已经把敏感性分析列为必做项；Nature Communications 的 reproducibility/editorial 指南也强调原始数据、透明报告和 robustness 检查应尽早进入审稿视野。把稳健性前移到主文，比把所有“可能翻车的地方”塞进补充更抗审稿。([GitHub][1])
+
+---
+
+## 逐表设计
+
+### Table 1
+
+**表标题**：冻结输入层与纳入审计字典
+**主键**：文件级主键 `read_path`；重复层唯一键 `(sample_id, replicate, marker)`
+**与图的映射**：Fig. 1A–D，Fig. 2A
+
+| 字段                | 定义                                  | 备注                            |
+| ----------------- | ----------------------------------- | ----------------------------- |
+| `read_path`       | 原始 FASTQ 绝对路径                       | 文件级主键                         |
+| `sample_id`       | 样本主键，等于 `sample_token`              | 跨步骤唯一主键                       |
+| `sample_token`    | 文件名解析得到的原始样本标识                      | 不改语义                          |
+| `replicate`       | A/B/C 技术重复代理                        | 非生物重复                         |
+| `marker`          | ITS1/ITS2                           | marker-specific 主线            |
+| `control_flag`    | MAIN / NEGATIVE / AUX_CONTROL       | 按 Step 1 规则解析                 |
+| `manifest_status` | accepted / excluded / manual_review | **绘图派生字段**，由 manifest 与日志联结生成 |
+| `error_code`      | Step 1 错误码                          | 来自 parse/exclusion log        |
+
+### Table 2
+
+**表标题**：clean lineage 证据表
+**主键**：`(sample_id, marker, taxon_rank, taxon_name)`
+**与图的映射**：Fig. 2C–D，Fig. 3A–D
+
+| 字段                         | 定义              | 备注            |
+| -------------------------- | --------------- | ------------- |
+| `sample_id`                | 样本主键            |               |
+| `marker`                   | ITS1/ITS2       |               |
+| `taxon_rank`               | 注释层级            |               |
+| `taxon_name`               | 注释名称            |               |
+| `confidence`               | 可排序置信度          | 来自 Step 3     |
+| `raw_reads`                | 过滤前 lineage 支持量 | 来自 Step 4 派生  |
+| `clean_reads`              | 过滤后 lineage 支持量 | Step 4 核心字段   |
+| `retained_flag`            | 是否保留到 Step 5    | Step 5 逻辑显式使用 |
+| `replicate_support_status` | 是否有重复支持         | Step 5 逻辑显式使用 |
+
+### Table 3
+
+**表标题**：样本级终判表
+**主键**：`sample_id`
+**与图的映射**：Fig. 4A–D，Fig. 5B–D
+
+| 字段                           | 定义                    | 备注                                          |
+| ---------------------------- | --------------------- | ------------------------------------------- |
+| `sample_id`                  | 样本主键                  |                                             |
+| `dominant_*_ITS1`            | ITS1 主导谱系字段组          | 至少含 `taxon_rank / taxon_name / clean_reads` |
+| `dominant_*_ITS2`            | ITS2 主导谱系字段组          | 同上                                          |
+| `n_secondary_supported_ITS1` | ITS1 支持的次级候选数         | **绘图派生字段**                                  |
+| `n_secondary_supported_ITS2` | ITS2 支持的次级候选数         | **绘图派生字段**                                  |
+| `final_type`                 | 主导单谱系型 / 稳定多谱系型 / 未定型 | Step 6 唯一终点                                 |
+| `reason_code`                | 终判原因码                 | Step 6 核心解释字段                               |
+
+### Table 4
+
+**表标题**：缺失输入与降级路径登记表
+**主键**：`missing_input_name`
+**与图的映射**：尤其关联 Fig. 4D、可选品牌/批次异质性图
+
+| 缺失输入                              | 需要的最小字段                                             | 缺失影响              | 替代方案                    |
+| --------------------------------- | --------------------------------------------------- | ----------------- | ----------------------- |
+| `sample_label_reference.tsv`      | `sample_id, labeled_taxon_rank, labeled_taxon_name` | 不能直接做“标签一致/不一致”主图 | 主文先聚焦结构判型；补齐后再画 Fig. 4D |
+| `manufacturer_batch_metadata.tsv` | `sample_id, supplier, batch`                        | 不能做供应商/批次聚类稳健性图   | 仅保留样本级图，不做供应商比较         |
+| `sensitivity_grid_summary.tsv`    | 见 Fig. 5A                                           | 不能主文展示阈值稳健性       | 至少在补充材料生成并汇报            |
+
+---
+
+## 最小可复现映射
+
+### 每张图/表对应输入文件与字段映射
+
+| 对象      | 输入文件                                                                                                                                                                                                                                                                      | 关键字段                                                                                                         |
+| ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| Fig. 1  | `manifest_ITS1.tsv`, `manifest_ITS2.tsv`, `sample_groups.tsv`, `control_manifest.tsv`, `aux_control_manifest.tsv`, `filename_parse_log.tsv`, `exclusion_log.tsv`                                                                                                          | `sample_id, sample_token, replicate, marker, control_flag, read_path, error_code`                            |
+| Fig. 2  | `qc_summary.tsv`, `ITS1_asv_table.tsv`, `ITS2_asv_table.tsv`, `ITS1_candidate_lineages.tsv`, `ITS2_candidate_lineages.tsv`, `ITS1_clean_lineages.tsv`, `ITS2_clean_lineages.tsv`, `ITS2_negative_profile.tsv`, `ITS_aux_control_profile.tsv`, `annotation_confidence.tsv` | `sample_id, marker, feature_id, taxon_rank, taxon_name, raw_reads, clean_reads, reads, confidence`           |
+| Fig. 3  | `sample_dominant_lineage_ITS1.tsv`, `sample_dominant_lineage_ITS2.tsv`, `sample_secondary_candidates_ITS1.tsv`, `sample_secondary_candidates_ITS2.tsv`, `replicate_support_summary.tsv`, clean lineage tables                                                             | `sample_id, marker, taxon_rank, taxon_name, clean_reads, retained_flag, replicate_support_status, replicate` |
+| Fig. 4  | `sample_type_call.tsv`, `dominance_profile.tsv`, dominant/secondary tables, `cross_marker_support_summary.tsv`, `unresolved_cases.tsv`                                                                                                                                    | `sample_id, final_type, reason_code` + Step 6 逻辑派生布尔字段                                                       |
+| Fig. 5  | `sample_type_call.tsv`, `unresolved_cases.tsv`, `final_interpretation_notes.tsv`, **派生** `sensitivity_grid_summary.tsv`                                                                                                                                                   | `sample_id, final_type, reason_code` + 参数网格派生字段                                                              |
+| Table 1 | Fig. 1 同源                                                                                                                                                                                                                                                                 | 同上                                                                                                           |
+| Table 2 | clean lineage / confidence / replicate summary                                                                                                                                                                                                                            | 同上                                                                                                           |
+| Table 3 | dominant / secondary / final call                                                                                                                                                                                                                                         | 同上                                                                                                           |
+| Table 4 | 手工登记                                                                                                                                                                                                                                                                      | 缺失输入名称与字段需求                                                                                                  |
+
+### 必要聚合与过滤逻辑（伪代码）
+
+```python
+# Fig.1B 文件审计
+all_files = scan_fastq_files(root_dir)
+parsed = parse_filename(all_files)
+accepted = bind_rows(manifest_ITS1, manifest_ITS2, control_manifest, aux_control_manifest)
+audit = (
+    all_files
+    .left_join(filename_parse_log, on="read_path")
+    .left_join(exclusion_log, on="read_path")
+    .left_join(accepted[["read_path","marker","control_flag"]], on="read_path")
+    .mutate(manifest_status = case_when(
+        read_path in accepted -> "accepted",
+        error_code not null -> "excluded_or_review",
+        True -> "unresolved_scan"
+    ))
+)
+```
+
+```python
+# Fig.2C ITS2 原始/净化后支持量
+its2_raw = ITS2_candidate_lineages.groupby(["sample_id","taxon_rank","taxon_name"]).sum("raw_reads")
+its2_clean = ITS2_clean_lineages.groupby(["sample_id","taxon_rank","taxon_name"]).sum("clean_reads")
+control_taxa = bind_rows(ITS2_negative_profile, ITS_aux_control_profile)\
+    .groupby(["taxon_rank","taxon_name"]).sum("reads")\
+    .rename(control_reads="reads")
+
+plot_tbl = its2_raw.join(its2_clean, how="left").fillna(clean_reads=0)\
+    .join(control_taxa, on=["taxon_rank","taxon_name"], how="left")\
+    .mutate(in_control_profile = control_reads > 0)
+```
+
+```python
+# Fig.3A 主导占比
+total_clean = bind_rows(ITS1_clean_lineages, ITS2_clean_lineages)\
+    .groupby(["sample_id","marker"]).sum("clean_reads")\
+    .rename(total_clean_reads="clean_reads")
+
+dominant = bind_rows(dom_its1, dom_its2)\
+    .join(total_clean, on=["sample_id","marker"])\
+    .mutate(dominant_share = dominant_clean_reads / total_clean_reads)
+```
+
+```python
+# Fig.3D replicate Jaccard
+presence = bind_rows(ITS1_clean_lineages, ITS2_clean_lineages)\
+    .filter(clean_reads > 0)\
+    .select("sample_id","marker","replicate","taxon_rank","taxon_name").distinct()
+
+jaccard_tbl = pairwise_jaccard(
+    data=presence,
+    group_keys=["sample_id","marker"],
+    item_keys=["taxon_rank","taxon_name"],
+    replicate_key="replicate"
+)
+```
+
+```python
+# Fig.4 终判证据展开
+cross = sample_type_call\
+    .join(dom_its1, on="sample_id", how="left")\
+    .join(dom_its2, on="sample_id", how="left")\
+    .mutate(
+        has_dom_ITS1 = dominant_taxon_name_ITS1.notnull(),
+        has_dom_ITS2 = dominant_taxon_name_ITS2.notnull(),
+        dom_match = has_dom_ITS1 & has_dom_ITS2 & same_taxon(ITS1, ITS2),
+        dom_conflict = has_dom_ITS1 & has_dom_ITS2 & (~same_taxon(ITS1, ITS2)),
+        # cross_secondary_supported 按 Step 6 规则由 sec 表交集生成
+    )
+```
+
+```python
+# Fig.5A 敏感性网格
+for low_abundance_policy in grid_low:
+    for secondary_cross_support_policy in grid_sec:
+        rerun_step4_to_step6(...)
+        append sample_id, policies..., final_type to sensitivity_grid_summary.tsv
+```
+
+---
+
+## 刊可发表性检查清单
+
+### 1) 完整性
+
+* 主文必须覆盖：输入冻结 → 质控/控样 → 主导/次级结构 → 跨 marker 终判 → 稳健性/边界。
+* 任何“标签一致性”结论若无 `sample_label_reference.tsv`，一律标注 **缺失输入**，不得偷画。
+* 所有排除都进日志；不得只报纳入不报剔除。([GitHub][2])
+
+### 2) 可复现性
+
+* 每一图都有明确输入文件与字段映射。
+* 主图脚本只读取冻结表，不直接读临时 notebook 中间对象。
+* 源数据与 source data spreadsheet 要能一对一回指到图层。
+* 敏感性分析与主参数分离报告，不能后验改主参数。([Nature][9])
+
+### 3) 可读性
+
+* 用 Nature 可访问配色；避免红绿对打、彩虹色、彩色文字、装饰 icon。
+* 所有轴标带单位；主图文字 5–7 pt；单/双栏尺寸按 89/183 mm 设计。
+* 主导谱系 identity 优先用文本/排序表达，不用大量离散颜色硬编码物种。([Nature Research Figure Guide][6])
+
+### 4) 统计透明性
+
+* 流程图、终判分布以效应量/比例/CI 为主，不堆砌无意义显著性。
+* marker 比较尽量使用**配对**检验，因为同一样本在 ITS1/ITS2 下成对出现。
+* 所有 reads 类图都标“support, not composition”。
+* replicate 只作一致性与出现频次，不上升为严格方差模型。([GitHub][1])
+
+### 5) 审稿抗压性
+
+* 把 `未定型` 设计成**有信息的保守结论**，而不是垃圾桶。
+* 把 `reason_code` 放进主文，而不是藏补充。
+* 明示冲突样本、单 marker 样本、阈值敏感样本。
+* 主文图全部可脚本重绘；不用生成式 AI 作图。([Nature][5])
+
+---
+
+## 参考来源清单（附链接）
+
+### 一、同领域论文
+
+1. Mück et al., 2024, *Three-tiered authentication of herbal traditional Chinese medicine ingredients used in women’s health provides progressive qualitative and quantitative insight*：给出原研究问题、公开数据入口及既有图表范式（Venn、分级结果图、abundance grouped results）。([Frontiers][3])
+2. Zhou et al., 2025, *DNA metabarcoding unveils authenticity and adulteration in commercial Chinese polyherbal preparations*：提供工作流图、测序指标图、ASV abundance 图、PCoA 图等近年范式，并明确 read abundance 不宜直接回推出原始配方比例。([Frontiers][4])
+3. Winand et al., 2025, *assessment of ITS1 and ITS2 Illumina sequencing using multiple defined mock communities*：支持 ITS1/ITS2 互补、不可互换、应晚整合。([Springer][8])
+4. Nazar et al., 2024, *Integrating DNA Barcoding Within an Orthogonal Approach for Herbal Product Authentication*：强调 DNA 方法应与其他证据正交互补，支持“主文不夸张到配方定量”。([PMC][10])
+
+### 二、期刊规范 / 方法与报告规范
+
+1. Nature Microbiology, 2025, *Guidelines for preventing and reporting contamination in low-biomass microbiome studies*：强调污染控制、最小报告标准、去污染流程透明化。([Nature][7])
+2. Keenum et al., 2023, *Amplicon Sequencing Minimal Information (ASqMI)*：强调 controls checklist、阈值前置、过程记录、AS 更偏定性判断。([OUP Academic][11])
+3. Nature research figure guide：轴与单位、可访问配色、5–7 pt 字号、89/183 mm 宽度、可编辑向量格式。([Nature Research Figure Guide][6])
+4. Nature / Scientific Reports submission guidance：图例应自洽、子图用小写粗体字母、线宽和文字需在缩印后可读。([Nature][12])
+5. Nature Portfolio reporting standards / reproducibility editorials：审稿前就要求 reporting summary、source data 与透明报告。([Nature][13])
+
+### 三、专栏 / 博客 / 论坛
+
+1. QIIME 2 Forum, 2024：manifest 列名与导入格式错误会直接导致流程失败，支持把 manifest 校验放在硬门槛。([QIIME 2 Forum][14])
+2. GigaScience blog, 2024, *Riddles of the Sphinx*：点出生成式 AI hallucination 在科学出版中的完整性风险，支持“人审优先、AI 不产图”。([OUP Academic][15])
+3. Harvard Misinformation Review, 2025：把 AI hallucination 概念化为“自信型错误”，支持所有 AI 参与内容必须可核验、可回源。([Misinformation Review][16])
+4. Nature Portfolio AI policy：LLM 不能署名；生成式 AI 图像不允许发表；AI 使用需有人类负责并适当披露。([Nature][5])
+5. Springer Nature integrity tools press release, 2024：出版方已把 AI 伪内容与图像问题当作前置筛查对象，说明审稿环境对“可疑图”“不可复现图”更敏感。([group.springernature.com][17])
+
+如果你要，我下一步可以把这套方案直接压成“主文图 + Extended Data + Supplementary Table”的投稿级目录版本。
+
+[1]: https://github.com/1lanweisen/huitu/raw/refs/heads/main/zhongyifangan "raw.githubusercontent.com"
+[2]: https://github.com/1lanweisen/huitu/raw/refs/heads/main/%E7%BB%86%E5%88%99 "raw.githubusercontent.com"
+[3]: https://www.frontiersin.org/journals/pharmacology/articles/10.3389/fphar.2024.1353434/full "https://www.frontiersin.org/journals/pharmacology/articles/10.3389/fphar.2024.1353434/full"
+[4]: https://www.frontiersin.org/journals/pharmacology/articles/10.3389/fphar.2025.1584065/full "https://www.frontiersin.org/journals/pharmacology/articles/10.3389/fphar.2025.1584065/full"
+[5]: https://www.nature.com/nature-portfolio/editorial-policies/ai "https://www.nature.com/nature-portfolio/editorial-policies/ai"
+[6]: https://research-figure-guide.nature.com/figures/preparing-figures-our-specifications/ "https://research-figure-guide.nature.com/figures/preparing-figures-our-specifications/"
+[7]: https://www.nature.com/articles/s41564-025-02035-2 "https://www.nature.com/articles/s41564-025-02035-2"
+[8]: https://link.springer.com/article/10.1186/s12864-025-11917-y "https://link.springer.com/article/10.1186/s12864-025-11917-y"
+[9]: https://www.nature.com/articles/s41467-018-06012-8 "https://www.nature.com/articles/s41467-018-06012-8"
+[10]: https://pmc.ncbi.nlm.nih.gov/articles/PMC11743069/ "https://pmc.ncbi.nlm.nih.gov/articles/PMC11743069/"
+[11]: https://academic.oup.com/jaoac/article/106/5/1424/7126398 "https://academic.oup.com/jaoac/article/106/5/1424/7126398"
+[12]: https://www.nature.com/nature/for-authors/initial-submission "https://www.nature.com/nature/for-authors/initial-submission"
+[13]: https://www.nature.com/npjurbansustain/editorial-policies/reporting-standards "https://www.nature.com/npjurbansustain/editorial-policies/reporting-standards"
+[14]: https://forum.qiime2.org/t/i-am-getting-this-error-whiile-creating-manifest-file-importing-and-other-downstream-application-can-anyone-help-on-this/30481 "https://forum.qiime2.org/t/i-am-getting-this-error-whiile-creating-manifest-file-importing-and-other-downstream-application-can-anyone-help-on-this/30481"
+[15]: https://gigasciencejournal.com/blog/riddles-of-the-sphinx-research-integrity/ "https://gigasciencejournal.com/blog/riddles-of-the-sphinx-research-integrity/"
+[16]: https://misinforeview.hks.harvard.edu/article/new-sources-of-inaccuracy-a-conceptual-framework-for-studying-ai-hallucinations/ "https://misinforeview.hks.harvard.edu/article/new-sources-of-inaccuracy-a-conceptual-framework-for-studying-ai-hallucinations/"
+[17]: https://group.springernature.com/gp/group/media/press-releases/new-research-integrity-tools-using-ai/27200740 "https://group.springernature.com/gp/group/media/press-releases/new-research-integrity-tools-using-ai/27200740"
