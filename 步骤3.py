@@ -14,6 +14,7 @@ Fixes included:
 6) reference provenance is frozen into annotation_confidence.tsv / unassigned_features.tsv
 7) duplicate feature_id rows in ASV tables are auto-collapsed by summing reads
 8) transposed ASV tables (sample x feature) are auto-detected and transposed
+9) non-feature metadata columns in transposed ASV tables (e.g. replicate) are auto-dropped
 """
 
 from __future__ import annotations
@@ -296,6 +297,7 @@ def _reorient_asv_table_if_needed(
 
     If transposed, automatically convert it into the expected orientation.
     Also collapse duplicated sample rows before transpose by summing reads.
+    Also auto-drop non-feature metadata columns (e.g. replicate) before transpose.
     """
     if asv_df.empty or asv_df.shape[1] < 2:
         raise Step3Error(f"ASV table is empty or malformed for {marker}")
@@ -318,7 +320,6 @@ def _reorient_asv_table_if_needed(
         row_id_col = str(tmp.columns[0])
         tmp[row_id_col] = tmp[row_id_col].astype(str).str.strip()
 
-        # basic sample-id checks, but do not fail immediately on duplicates
         sample_ids = tmp[row_id_col].tolist()
         if any(not s for s in sample_ids):
             raise Step3Error(f"Blank sample_id rows detected in transposed ASV table for {marker}")
@@ -330,11 +331,23 @@ def _reorient_asv_table_if_needed(
                     f"Some sample_id rows failed regex validation in transposed ASV table for {marker}: {bad_ids[:5]}"
                 )
 
-        feature_cols = [c for c in tmp.columns if c != row_id_col]
-        if not feature_cols:
-            raise Step3Error(f"No feature columns detected in transposed ASV table for {marker}")
+        candidate_cols = [c for c in tmp.columns if c != row_id_col]
 
-        # convert all feature columns to numeric before any row-collapse
+        # Keep only real feature columns that are present in rep_seqs FASTA
+        feature_cols = [c for c in candidate_cols if c in seq_map]
+
+        # Drop metadata / non-feature columns automatically
+        dropped_metadata_cols = [c for c in candidate_cols if c not in seq_map]
+        if dropped_metadata_cols:
+            print(
+                f"[Step3] WARN: {marker} transposed ASV table contains non-feature metadata columns; "
+                f"dropping before transpose: {dropped_metadata_cols[:10]}",
+                file=sys.stderr,
+            )
+
+        if not feature_cols:
+            raise Step3Error(f"No usable feature columns detected in transposed ASV table for {marker}")
+
         for col in feature_cols:
             tmp[col] = pd.to_numeric(tmp[col], errors="coerce").fillna(0)
             if (tmp[col] < 0).any():
@@ -342,7 +355,9 @@ def _reorient_asv_table_if_needed(
                     f"Negative reads detected in transposed ASV table for {marker}, feature column {col}"
                 )
 
-        # collapse duplicated sample rows before transpose
+        # Keep only sample_id column + true feature columns
+        tmp = tmp[[row_id_col] + feature_cols].copy()
+
         if tmp[row_id_col].duplicated().any():
             dup_rows = int(tmp[row_id_col].duplicated(keep=False).sum())
             dup_ids = int(tmp.loc[tmp[row_id_col].duplicated(keep=False), row_id_col].nunique())
