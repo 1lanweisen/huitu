@@ -1,0 +1,210 @@
+
+________________________________________
+1. 总体大纲（单一主线流程图）
+公开数据审计并冻结 eligible contrasts
+→ 从 raw reads/官方 count 统一重建或校对 gene-level count
+→ 为每个 contrast 输出 gene-level logFC 与 SE
+→ 做 dependence-aware 元分析，先形成 cross-stress background，再计算 dehydration-bias
+→ 冻结唯一一级主终点：dehydration-biased gene set
+→ 仅在 frozen gene set 内叠加 DAP-seq 与 root single-cell atlas，解释最小调控骨架，不回写 discovery 标签。(NCBI)
+2. 科学问题与一级主终点（冻结定义）
+科学问题
+在仅纳入可由 raw 数据重建或由官方 count 交叉校对、treated-control 合法、研究内共享对照/多时间点依赖结构可编码的 Arabidopsis bulk RNA-seq 后，是否能得到一组dehydration-biased 基因：它们相对于跨 SA / salt / heat / cold 的背景反应，在 dehydration 中持续偏强，且这一偏强在 leave-one-study-out 后不翻转、也不由单研究驱动。(NCBI)
+一级主终点（冻结定义）
+dehydration_biased_frozen.tsv。
+冻结标准只有这一套：
+1.	dehydration 独立研究数阈值至少 2 项；当前审计下仅为 GSE74864 与 GSE113515，属边界满足。
+2.	每个候选基因必须来自 count-compatible 的 logFC + SE，而不是作者 DEG 名单。
+3.	dehydration 相对 cross-stress background 的偏强方向，在 leave-one-study-out 后不得翻转。
+4.	不得出现 single-study-driver 标记。
+5.	任何 DAP-seq、single-cell atlas、手工文献或博客/论坛信息都不能回写主终点成员资格。(NCBI)
+注：cross_stress_background.tsv 只是主终点的背景层，不单独作为并行主终点。
+3. 连续步骤（Step 1 ~ Step 6）
+Step 1：冻结 eligible contrasts
+步骤目的（为何必需）
+先把“哪些对比合法”冻结，否则 GSE182617、GSE74864、GSE153103、GSE116004 这类含共享对照、多时间点、同研究多 contrast 的设计会把依赖结构误当独立研究，直接污染主终点。(NCBI)
+输入数据来源
+原始来源：GEO/SRA 系列页、系列/样本元数据、对应论文原文。
+前置限定：仅限审计表“进入主线=是”的 7 个数据集。(NCBI)
+输出对象（文件名 + 必备表头）
+eligible_contrast_manifest.tsv
+表头：study_id, accession, species, genotype, tissue, stress_class, arm_id, time_label, treatment_label, control_label, n_treat, n_ctrl, shared_control_id, time_block_id, technical_eligible_but_question_mismatch, include_flag, exclude_reason, low_rep_risk_flag
+方法依据 DOI
+10.1002/jrsm.5
+10.18637/jss.v036.i03
+与前一步衔接 DOI
+起始步骤；其衔接依据即后续相关效应量元分析对研究内相关结构编码的要求：10.1002/jrsm.5
+纳入/排除判据
+纳入：WT/Col-0 bulk RNA-seq；treated-control 关系可恢复；共享对照与时间块可编码；可回溯到 raw 或官方 count。
+排除：论文未核验且无法确认设计；无合法对照；只剩单样本 transcriptome；明显 question mismatch。
+失败条件
+任何 contrast 不能明确 control_label 或 shared_control_id，立即排除；若 dehydration 独立研究数跌到 2 以下，主终点冻结资格终止。
+________________________________________
+Step 2：统一重建/校对 gene-level counts
+步骤目的（为何必需）
+主线分析单位不是作者给的 DEG，而是统一尺度的 gene-level counts。GSE137212、GSE74864、GSE116004 都明确可回溯至 raw+processed；GSE182617 还提供了 hormone-specific count matrix，可作为 raw 重建后的交叉校对对象。(NCBI)
+输入数据来源
+原始来源：Step 1 纳入样本对应 FASTQ/SRA；
+若研究同时提供官方 count matrix，则仅作为核对，不替代 raw 重建。
+输出对象（文件名 + 必备表头）
+gene_count_matrix.tsv
+表头：第一列 gene_id，其余列为样本 ID。
+sample_annotation.tsv
+表头：sample_id, study_id, stress_class, genotype, tissue, arm_id, time_label, treatment_group, control_group, shared_control_id, time_block_id
+方法依据 DOI
+10.1093/bioinformatics/bts635
+10.1093/bioinformatics/btt656
+与前一步衔接 DOI
+从 eligible sample list 到 gene-level counts 的标准桥接：10.1093/bioinformatics/bts635；10.1093/bioinformatics/btt656
+纳入/排除判据
+纳入：样本标签与 GEO 元数据一致；可形成稳定 gene counts。
+排除：raw reads 缺失/不可追溯；样本标签与系列设计冲突；只能得到作者筛选后的 DEG。
+失败条件
+任一研究若无法输出可用 gene_count_matrix.tsv，整项研究退出；不得用 TPM/FPKM 直接替代主链输入。
+________________________________________
+Step 3：为每个 contrast 提取 count-compatible effect / SE
+步骤目的（为何必需）
+唯一主终点需要的是每个基因、每个 contrast 的 logFC 与 SE；没有 SE，后面无法做相关效应量元分析。GSE145742 被剔除就是因为 transcriptome 臂只有单样本，不能在这一步合法通过。(NCBI)
+输入数据来源
+前一步输出：gene_count_matrix.tsv、sample_annotation.tsv
+输出对象（文件名 + 必备表头）
+contrast_effect_table.tsv
+表头：gene_id, study_id, contrast_id, stress_class, arm_id, time_label, logFC, SE, df, n_treat, n_ctrl, shared_control_id, time_block_id, low_rep_risk_flag
+方法依据 DOI
+10.1186/gb-2014-15-2-r29
+10.1093/nar/gkv007
+与前一步衔接 DOI
+gene counts 到可比较的均值-方差框架：10.1186/gb-2014-15-2-r29
+纳入/排除判据
+纳入：contrast 内 treat/control 可估计残差方差。
+排除：无重复；离群到 SE 不可信；设计矩阵与元数据不一致。
+失败条件
+任一 contrast 不能输出 logFC + SE，该 contrast 不进入 Step 4。
+________________________________________
+Step 4：做 dependence-aware 元分析，先构造背景层，再计算 dehydration-bias
+步骤目的（为何必需）
+这一步只解决一个问题：每个基因在 dehydration 中是否比 cross-stress background 更强，且这种偏强是否稳定。
+为此必须显式处理：
+•	GSE182617 的多时间点共用 0 h 对照；
+•	GSE74864 的 Dehy 1 h / 3 h 共用 NC；
+•	GSE153103 的同研究多时间 contrasts；
+•	GSE116004 的同研究内按 ZT 分层的 heat/cold contrasts。(NCBI)
+输入数据来源
+前一步输出：contrast_effect_table.tsv
+输出对象（文件名 + 必备表头）
+cross_stress_background.tsv
+表头：gene_id, pooled_background_effect, pooled_background_SE, supporting_studies, supporting_stress_classes, heterogeneity_flag, single_study_driver_flag
+dehydration_bias_meta.tsv
+表头：gene_id, dehydration_effect, dehydration_SE, background_effect, bias_direction, bias_stability_flag, loo_flag, single_study_driver_flag
+方法依据 DOI
+10.1002/jrsm.5
+10.18637/jss.v036.i03
+与前一步衔接 DOI
+Step 3 生成的 yi/vi 是相关效应量元分析的直接输入：10.1002/jrsm.5；10.18637/jss.v036.i03
+纳入/排除判据
+纳入：shared_control_id 与 time_block_id 可编码的 contrasts。
+排除：共享对照无法唯一识别；gene-level 结果在 leave-one-study-out 后翻转；任何基因仅由单研究支撑。
+失败条件
+若 dehydration 独立研究数 < 2，或 bias 方向在 LOO 后翻转，则该基因不进入主终点。
+________________________________________
+Step 5：冻结唯一一级主终点
+步骤目的（为何必需）
+把 discovery 彻底停止在这里，后面所有机制资源只允许解释，不允许改标签。这一步直接修复历史问题里“mechanism 回写 discovery”的缺陷。(Reddit)
+输入数据来源
+前一步输出：cross_stress_background.tsv、dehydration_bias_meta.tsv
+输出对象（文件名 + 必备表头）
+dehydration_biased_frozen.tsv
+表头：gene_id, supporting_dehydration_studies, supporting_total_studies, pooled_bias_summary, loo_stability_flag, single_study_driver_flag, freeze_status, freeze_reason
+方法依据 DOI
+10.1002/jrsm.5
+10.18637/jss.v036.i03
+与前一步衔接 DOI
+pooled effect、影响诊断与 LOO 稳定性均直接来自 Step 4：10.18637/jss.v036.i03
+纳入/排除判据
+纳入：dehydration-bias 稳定，且不依赖单研究。
+排除：必须借助 TF 网络、single-cell atlas 或手工文献解释后才成立的基因。
+失败条件
+若 GSE74864 或 GSE113515 任一在前面失效，导致 dehydration 独立研究数 < 2，则 dehydration_biased_frozen.tsv 输出为空表，并标记：freeze_status = 未达冻结条件。
+________________________________________
+Step 6：在 frozen gene set 内解释最小调控骨架
+步骤目的（为何必需）
+只回答一个机制问题：哪些最少的 TF 节点可以解释最多的 frozen genes，并在 root cell-context 中给出优先验证顺序。
+这里仅允许使用一一对应可核验的资源：
+•	Arabidopsis DAP-seq / cistrome：O’Malley et al., Cell, DOI 10.1016/j.cell.2016.04.038
+•	Arabidopsis root atlas：Shahan et al., Dev Cell, DOI 10.1016/j.devcel.2022.01.008，GEO: GSE152766。(Cell)
+输入数据来源
+前一步输出：dehydration_biased_frozen.tsv
+外部解释资源：DAP-seq 资源；root single-cell atlas（GSE152766）
+输出对象（文件名 + 必备表头）
+minimal_regulatory_backbone.tsv
+表头：TF_id, target_gene_id, edge_source, target_coverage_rank, TF_self_response_flag, root_context_flag
+priority_validation_targets.tsv
+表头：gene_id, freeze_status, bias_stability_rank, TF_edge_support, root_context_flag, validation_priority_rank
+方法依据 DOI
+10.1016/j.cell.2016.04.038
+10.1016/j.devcel.2022.01.008
+与前一步衔接 DOI
+“先冻结 gene set，再叠加 TF-target 与 cell-context 做解释”的桥接依据就是上面这两套资源本身：10.1016/j.cell.2016.04.038；10.1016/j.devcel.2022.01.008
+纳入/排除判据
+纳入：能被已核验 TF-target 资源覆盖，且只作为解释层证据。
+排除：试图用机制层信息回写 frozen membership；资源名与 DOI 不能一一对应者。
+失败条件
+若某 TF 只在解释层成立、但不能在 frozen gene set 内形成稳定覆盖，不进入最小骨架。
+4. 全链路数据血缘表
+步骤	输入来源	输入对象	输出对象
+Step 1	GEO/SRA 页面 + 论文原文	accession、样本设计、对照关系	eligible_contrast_manifest.tsv
+Step 2	Step 1 + raw reads/官方 count	eligible 样本表、FASTQ/SRA、统一注释	gene_count_matrix.tsv、sample_annotation.tsv
+Step 3	Step 2	gene counts、sample annotation	contrast_effect_table.tsv
+Step 4	Step 3	gene-level logFC/SE + shared_control_id/time_block_id	cross_stress_background.tsv、dehydration_bias_meta.tsv
+Step 5	Step 4	pooled background + dehydration-bias + LOO/influence	dehydration_biased_frozen.tsv
+Step 6	Step 5 + 外部解释资源	frozen genes + DAP-seq + root atlas	minimal_regulatory_backbone.tsv、priority_validation_targets.tsv
+5. 最终交付清单
+1.	eligible_contrast_manifest.tsv
+2.	sample_annotation.tsv
+3.	gene_count_matrix.tsv
+4.	contrast_effect_table.tsv
+5.	cross_stress_background.tsv
+6.	dehydration_bias_meta.tsv
+7.	dehydration_biased_frozen.tsv
+8.	minimal_regulatory_backbone.tsv
+9.	priority_validation_targets.tsv
+10.	主线流程图
+11.	主终点冻结说明页
+12.	原文核验页与原文链接清单
+6. DOI 清单（去重）
+10.1002/jrsm.5
+10.18637/jss.v036.i03
+10.1093/bioinformatics/bts635
+10.1093/bioinformatics/btt656
+10.1186/gb-2014-15-2-r29
+10.1093/nar/gkv007
+10.1016/j.cell.2016.04.038
+10.1016/j.devcel.2022.01.008
+7. 原文链接清单（数据库页、论文页、近24个月博客/论坛）
+数据库页
+•	GSE137212 数据库页 (NCBI)
+•	GSE182617 数据库页 (NCBI)
+•	GSE74864 数据库页 (NCBI)
+•	GSE113515 数据库页 (NCBI)
+•	GSE153103 数据库页 (NCBI)
+•	GSE113138 数据库页 (NCBI)
+•	GSE116004 数据库页 (NCBI)
+•	GSE123620 数据库页（论文未核验） (NCBI)
+•	GSE145742 数据库页 (NCBI)
+•	GSE229217：本轮未直接打开原始 GEO accession viewer，仅核到论文中的 GEO 号与外部聚合链接；因此在数据库原页层面记为部分核验 (MDPI)
+论文页 / 出版社页 / PMC
+•	GSE137212 对应论文：Plant Cell / PMC (PMC)
+•	GSE182617 对应原文：bioRxiv / PMC 预印本 (PMC)
+•	GSE74864 对应论文：Genome Research / PMC (PMC)
+•	GSE113515 对应论文：PNAS / PubMed (PNAS)
+•	GSE153103 对应论文：Nature Plants (Nature)
+•	GSE113138 对应论文：ScienceDirect (ScienceDirect)
+•	GSE116004 对应论文：Scientific Reports / Nature (Nature)
+•	GSE145742 对应论文线索：OUP/Journal of Experimental Botany 关联记录 (PubMed)
+•	GSE229217 对应论文：MDPI / PMC (MDPI)
+•	机制解释资源：Arabidopsis DAP-seq / cistrome (Cell)
+•	机制解释资源：Arabidopsis root atlas（GSE152766） (PMC)
+•	
+________________________________________
+•	
+
